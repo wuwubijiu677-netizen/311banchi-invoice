@@ -1258,11 +1258,22 @@ function formatDateShort(dateStr) {
 
   if (Number.isNaN(d.getTime())) return dateStr;
 
-  return `${d.getMonth()+1}/${d.getDate()}`;
+ return `${d.getMonth()+1}/${d.getDate()}（${getWeekday(dateStr)}）`;
 
 }
 
+function getWeekday(dateStr) {
 
+  if (!dateStr) return "";
+
+  const d = new Date(dateStr);
+
+  if (Number.isNaN(d.getTime())) return "";
+
+  const days = ["日","月","火","水","木","金","土"];
+
+  return days[d.getDay()];
+}
 function formatDateLong(dateStr) {
 
   if (!dateStr) return "";
@@ -1271,8 +1282,7 @@ function formatDateLong(dateStr) {
 
   if (Number.isNaN(d.getTime())) return dateStr;
 
-  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
-
+ return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${getWeekday(dateStr)}）`;
 }
 
 
