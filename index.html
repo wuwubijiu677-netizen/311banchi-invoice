@@ -482,7 +482,7 @@ button {
 
       <div class="field">
         <label>会社名</label>
-        <input id="customerCompany" value="株式会社プライマルヴェニュー">
+        <input id="customerCompany" value="">
       </div>
 
       <div class="field">
@@ -1622,19 +1622,9 @@ function resetForm() {
 
   }
 
-  document.querySelectorAll("input,textarea").forEach(el => {
-
-    if (el.id === "customerCompany") {
-
-      el.value = "株式会社プライマルヴェニュー";
-
-    } else {
-
-      el.value = "";
-
-    }
-
-  });
+ document.querySelectorAll("input,textarea").forEach(el => {
+  el.value = "";
+});
 
   routes = [];
 
