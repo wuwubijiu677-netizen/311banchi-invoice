@@ -640,7 +640,47 @@ button {
 
 </div>
 
+<!-- 請求管理 -->
+<div class="panel" style="margin-top:20px;">
 
+  <h2>請求管理</h2>
+
+  <div class="button-row">
+    <button class="btn-main" onclick="registerCurrentInvoice()">
+      現在の請求書を登録
+    </button>
+
+    <button class="btn-sub" onclick="showInvoiceLedger()">
+      一覧を更新
+    </button>
+  </div>
+
+  <div class="table-wrap" style="margin-top:15px;">
+
+    <table class="items-table">
+
+      <thead>
+        <tr>
+          <th>請求書番号</th>
+          <th>請求日</th>
+          <th>取引先</th>
+          <th>案件名</th>
+          <th>請求額</th>
+          <th>入金期日</th>
+          <th>freee</th>
+          <th>入金</th>
+          <th></th>
+        </tr>
+      </thead>
+
+      <tbody id="invoiceLedgerBody">
+      </tbody>
+
+    </table>
+
+  </div>
+
+</div>
 <script>
 
 let docType = "quote";
