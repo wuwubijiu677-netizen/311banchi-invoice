@@ -1,0 +1,1647 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>311BANCHI 見積・請求書作成</title>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family:
+    "Noto Sans JP",
+    "Yu Gothic",
+    "Hiragino Kaku Gothic ProN",
+    Meiryo,
+    sans-serif;
+  background: #f4f5f7;
+  color: #222;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+h1 {
+  margin: 0 0 20px;
+  font-size: 28px;
+}
+
+.panel {
+  background: #fff;
+  border-radius: 12px;
+  padding: 22px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+
+.panel h2 {
+  margin: 0 0 16px;
+  font-size: 20px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 14px;
+}
+
+.row-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: 14px;
+}
+
+.field {
+  margin-bottom: 12px;
+}
+
+.field label {
+  display: block;
+  font-size: 14px;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  border: 1px solid #bbb;
+  border-radius: 7px;
+  padding: 9px 10px;
+  font-size: 15px;
+  background: #fff;
+}
+
+textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.btn-main {
+  background: #222;
+  color: #fff;
+}
+
+.btn-sub {
+  background: #e9eaec;
+  color: #222;
+}
+
+.btn-danger {
+  background: #d9534f;
+  color: #fff;
+}
+
+.button-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.type-switch {
+  display: flex;
+  gap: 10px;
+}
+
+.type-switch button {
+  flex: 1;
+  padding: 13px;
+  font-weight: bold;
+}
+
+.type-switch .active {
+  background: #222;
+  color: #fff;
+}
+
+.route-box {
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.route-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.route-title {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.stop {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.stop-title {
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.items-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.items-table th,
+.items-table td {
+  border: 1px solid #bbb;
+  padding: 8px;
+  vertical-align: top;
+}
+
+.items-table th {
+  background: #eee;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.actions {
+  position: sticky;
+  bottom: 0;
+  background: rgba(255,255,255,.95);
+  border-top: 1px solid #ddd;
+  padding: 14px 0 0;
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.preview-wrap {
+  background: #ddd;
+  padding: 30px;
+  overflow-x: auto;
+}
+
+.document {
+  width: 1120px;
+  min-height: 1580px;
+  margin: 0 auto;
+  background: #fff;
+  padding: 45px;
+  color: #111;
+}
+
+.doc-top {
+  display: grid;
+  grid-template-columns: 1.15fr .9fr;
+  gap: 35px;
+  margin-bottom: 22px;
+}
+
+.recipient h3 {
+  margin: 0 0 14px;
+  font-size: 25px;
+}
+
+.recipient-box {
+  border: 1px solid #111;
+  margin-bottom: 7px;
+}
+
+.recipient-row {
+  display: grid;
+  grid-template-columns: 115px 1fr;
+  min-height: 42px;
+}
+
+.recipient-label {
+  border-right: 1px solid #111;
+  padding: 9px 10px;
+  font-weight: bold;
+}
+
+.recipient-value {
+  padding: 9px 12px;
+}
+
+.company {
+  text-align: right;
+}
+
+.doc-title {
+  font-size: 40px;
+  font-weight: bold;
+  margin: 0 0 15px;
+}
+
+.company-name {
+  font-size: 21px;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.company-line {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.doc-divider {
+  border-top: 2px solid #555;
+  margin: 15px 0 20px;
+}
+
+.subject-meta {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 20px;
+}
+
+.subject {
+  font-size: 22px;
+  font-weight: bold;
+}
+
+.subject-label {
+  font-size: 14px;
+  margin-right: 18px;
+}
+
+.meta {
+  font-size: 13px;
+}
+
+.meta-row {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  margin-bottom: 5px;
+}
+
+.meta-row span:last-child {
+  text-align: right;
+}
+
+.doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.doc-table th,
+.doc-table td {
+  border: 1px solid #111;
+  padding: 8px;
+}
+
+.doc-table th {
+  background: #eee;
+  text-align: center;
+  font-size: 13px;
+}
+
+.doc-table .date-col { width: 75px; }
+.doc-table .type-col { width: 75px; }
+.doc-table .detail-col { width: auto; }
+.doc-table .qty-col { width: 70px; }
+.doc-table .unit-col { width: 95px; }
+.doc-table .amount-col { width: 105px; }
+
+.detail-main {
+  font-size: 13px;
+  margin-bottom: 5px;
+}
+
+.detail-address {
+  font-size: 11px;
+  margin-bottom: 9px;
+}
+
+.number {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.doc-item {
+  margin: 14px 0;
+  font-size: 14px;
+}
+
+.bottom-grid {
+  display: grid;
+  grid-template-columns: 1.35fr .8fr;
+  gap: 20px;
+  margin-top: 15px;
+}
+
+.bottom-box {
+  border: 1px solid #111;
+  min-height: 180px;
+  padding: 13px;
+}
+
+.bottom-title {
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.bank-line,
+.note-line {
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 13px;
+}
+
+.total-final {
+  border-top: 1px solid #111;
+  margin-top: 5px;
+  padding-top: 12px;
+  font-size: 22px;
+  font-weight: bold;
+}
+
+.invoice-note {
+  border-top: 1px solid #111;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.doc-footer {
+  margin-top: 30px;
+  font-size: 11px;
+}
+
+@media (max-width: 800px) {
+  .container {
+    padding: 12px;
+  }
+
+  .row,
+  .row-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .doc-top,
+  .subject-meta,
+  .bottom-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .document {
+    transform-origin: top left;
+  }
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  #printArea,
+  #printArea * {
+    visibility: visible;
+  }
+
+  #printArea {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  .document {
+    width: 100%;
+    min-height: auto;
+    margin: 0;
+    padding: 15mm;
+    box-shadow: none;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <h1>311BANCHI 見積・請求書作成</h1>
+
+  <div class="panel">
+
+    <h2>帳票種類</h2>
+
+    <div class="type-switch">
+      <button id="quoteBtn" class="active" onclick="setDocType('quote')">
+        見積書
+      </button>
+      <button id="invoiceBtn" onclick="setDocType('invoice')">
+        請求書
+      </button>
+    </div>
+
+  </div>
+
+
+  <div class="panel">
+
+    <h2>宛先</h2>
+
+    <div class="row">
+
+      <div class="field">
+        <label>会社名</label>
+        <input id="customerCompany" value="株式会社プライマルヴェニュー">
+      </div>
+
+      <div class="field">
+        <label>部署名</label>
+        <input id="customerDept">
+      </div>
+
+      <div class="field">
+        <label>担当者名</label>
+        <input id="customerPerson">
+      </div>
+
+      <div class="field">
+        <label>案件名</label>
+        <input id="subject">
+      </div>
+
+    </div>
+
+    <div class="row-3">
+
+      <div class="field">
+        <label id="dateLabel">見積日</label>
+        <input id="docDate" type="date">
+      </div>
+
+      <div class="field">
+        <label>帳票番号</label>
+        <input id="docNumber" placeholder="Q-0000000000">
+      </div>
+
+      <div class="field">
+        <label id="deadlineLabel">有効期限</label>
+        <input id="deadline" type="date">
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <div class="panel">
+
+    <h2>運搬内容</h2>
+
+    <div id="routes"></div>
+
+    <div class="button-row">
+      <button class="btn-sub" onclick="addRoute('往路')">
+        ＋ 往路を追加
+      </button>
+
+      <button class="btn-sub" onclick="addRoute('復路')">
+        ＋ 復路を追加
+      </button>
+    </div>
+
+  </div>
+
+
+  <div class="panel">
+
+    <h2>運搬品・金額</h2>
+
+    <div class="row">
+
+      <div class="field">
+        <label>運搬品</label>
+        <input id="cargo" value="イベント備品">
+      </div>
+
+      <div class="field">
+        <label>備考</label>
+        <textarea id="notes"></textarea>
+      </div>
+
+    </div>
+
+    <div class="table-wrap">
+
+      <table class="items-table">
+
+        <thead>
+          <tr>
+            <th>摘要</th>
+            <th style="width:100px;">数量</th>
+            <th style="width:150px;">単価</th>
+            <th style="width:150px;">金額</th>
+            <th style="width:90px;"></th>
+          </tr>
+        </thead>
+
+        <tbody id="itemsBody"></tbody>
+
+      </table>
+
+    </div>
+
+    <div class="button-row" style="margin-top:12px;">
+      <button class="btn-sub" onclick="addItem()">
+        ＋ 明細を追加
+      </button>
+    </div>
+
+  </div>
+
+
+  <div class="panel">
+
+    <h2>振込先</h2>
+
+    <div class="field">
+      <label>振込先</label>
+      <select id="bank">
+        <option value="smbc">三井住友銀行</option>
+        <option value="gmo">GMOあおぞらネット銀行</option>
+      </select>
+    </div>
+
+  </div>
+
+
+  <div class="actions">
+
+    <button class="btn-main" onclick="updatePreview()">
+      プレビュー更新
+    </button>
+
+    <button class="btn-main" onclick="window.print()">
+      PDF保存・印刷
+    </button>
+
+    <button class="btn-sub" onclick="resetForm()">
+      入力内容をリセット
+    </button>
+
+  </div>
+
+</div>
+
+
+<div class="panel" style="margin:20px;">
+
+  <h2>帳票プレビュー</h2>
+
+  <div class="preview-wrap">
+
+    <div id="printArea" class="document">
+
+      <div id="documentPreview"></div>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+
+let docType = "quote";
+
+let routes = [];
+
+let items = [];
+
+
+const companyInfo = {
+
+  name: "合同会社311BANCHI",
+
+  zip: "〒133-0073",
+
+  address: "東京都江戸川区鹿骨一丁目55番14号",
+
+  building: "グラントールⅡ 204",
+
+  tel: "携帯：090-9789-1376",
+
+  mail: "mail：uqki7121@gmail.com",
+
+  representative: "代表社員　屋比久悟",
+
+  registration: "登録番号：T7011703003439"
+
+};
+
+
+const banks = {
+
+  smbc: [
+
+    "【三井住友銀行】トランクＮＯＲＴＨ支店（403）",
+
+    "普通口座　0534099",
+
+    "口座名義　ド）サンビャクジュウイチバンチ"
+
+  ],
+
+  gmo: [
+
+    "【GMOあおぞらネット銀行】法人第二営業部支店（102）",
+
+    "普通口座　1503182",
+
+    "口座名義　ド）サンビャクジュウイチバンチ"
+
+  ]
+
+};
+
+
+function setDocType(type) {
+
+  docType = type;
+
+  document.getElementById("quoteBtn")
+    .classList.toggle("active", type === "quote");
+
+  document.getElementById("invoiceBtn")
+    .classList.toggle("active", type === "invoice");
+
+  if (type === "quote") {
+
+    document.getElementById("dateLabel").textContent = "見積日";
+
+    document.getElementById("deadlineLabel").textContent = "有効期限";
+
+  } else {
+
+    document.getElementById("dateLabel").textContent = "請求日";
+
+    document.getElementById("deadlineLabel").textContent = "入金期日";
+
+  }
+
+  updatePreview();
+
+}
+
+
+function addRoute(type) {
+
+  const route = {
+
+    type,
+
+    stops: type === "往路"
+
+      ? [
+
+          { kind: "搬出", no: 1, time: "", name: "", address: "" },
+
+          { kind: "搬入", no: 1, time: "", name: "", address: "" }
+
+        ]
+
+      : [
+
+          { kind: "搬出", no: 1, time: "", name: "", address: "" },
+
+          { kind: "搬入", no: 1, time: "", name: "", address: "" }
+
+        ]
+
+  };
+
+  routes.push(route);
+
+  renderRoutes();
+
+}
+
+
+function renderRoutes() {
+
+  const box = document.getElementById("routes");
+
+  box.innerHTML = "";
+
+  routes.forEach((route, routeIndex) => {
+
+    const div = document.createElement("div");
+
+    div.className = "route-box";
+
+    div.innerHTML = `
+
+      <div class="route-header">
+
+        <div class="route-title">${route.type}</div>
+
+        <button class="btn-danger" onclick="removeRoute(${routeIndex})">
+
+          削除
+
+        </button>
+
+      </div>
+
+      <div id="routeStops${routeIndex}"></div>
+
+      <div class="button-row">
+
+        <button class="btn-sub" onclick="addStop(${routeIndex}, '搬出')">
+
+          ＋ 搬出
+
+        </button>
+
+        <button class="btn-sub" onclick="addStop(${routeIndex}, '搬入')">
+
+          ＋ 搬入
+
+        </button>
+
+      </div>
+
+    `;
+
+    box.appendChild(div);
+
+    renderStops(routeIndex);
+
+  });
+
+}
+
+
+function renderStops(routeIndex) {
+
+  const route = routes[routeIndex];
+
+  const box = document.getElementById(`routeStops${routeIndex}`);
+
+  box.innerHTML = "";
+
+  route.stops.forEach((stop, stopIndex) => {
+
+    const div = document.createElement("div");
+
+    div.className = "stop";
+
+    const label = `${stop.kind}${stop.no > 1 ? stop.no : ""}`;
+
+    div.innerHTML = `
+
+      <div class="stop-title">
+
+        ${label}
+
+      </div>
+
+      <div class="row-3">
+
+        <div class="field">
+
+          <label>時刻</label>
+
+          <input value="${escapeHtml(stop.time)}"
+
+            onchange="updateStop(${routeIndex},${stopIndex},'time',this.value)">
+
+        </div>
+
+        <div class="field">
+
+          <label>名称</label>
+
+          <input value="${escapeHtml(stop.name)}"
+
+            onchange="updateStop(${routeIndex},${stopIndex},'name',this.value)">
+
+        </div>
+
+        <div class="field">
+
+          <label>住所</label>
+
+          <input value="${escapeHtml(stop.address)}"
+
+            onchange="updateStop(${routeIndex},${stopIndex},'address',this.value)">
+
+        </div>
+
+      </div>
+
+      <button class="btn-danger"
+
+        onclick="removeStop(${routeIndex},${stopIndex})">
+
+        この行を削除
+
+      </button>
+
+    `;
+
+    box.appendChild(div);
+
+  });
+
+}
+
+
+function updateStop(routeIndex, stopIndex, key, value) {
+
+  routes[routeIndex].stops[stopIndex][key] = value;
+
+}
+
+
+function addStop(routeIndex, kind) {
+
+  const route = routes[routeIndex];
+
+  const count = route.stops.filter(x => x.kind === kind).length + 1;
+
+  route.stops.push({
+
+    kind,
+
+    no: count,
+
+    time: "",
+
+    name: "",
+
+    address: ""
+
+  });
+
+  renumberStops(route);
+
+  renderRoutes();
+
+}
+
+
+function removeStop(routeIndex, stopIndex) {
+
+  routes[routeIndex].stops.splice(stopIndex, 1);
+
+  renumberStops(routes[routeIndex]);
+
+  renderRoutes();
+
+}
+
+
+function renumberStops(route) {
+
+  const counts = {};
+
+  route.stops.forEach(stop => {
+
+    counts[stop.kind] = (counts[stop.kind] || 0) + 1;
+
+    stop.no = counts[stop.kind];
+
+  });
+
+}
+
+
+function removeRoute(index) {
+
+  routes.splice(index, 1);
+
+  renderRoutes();
+
+}
+
+
+function addItem() {
+
+  items.push({
+
+    description: "",
+
+    qty: 1,
+
+    unit: 0
+
+  });
+
+  renderItems();
+
+}
+
+
+function renderItems() {
+
+  const body = document.getElementById("itemsBody");
+
+  body.innerHTML = "";
+
+  items.forEach((item,index) => {
+
+    const amount = Number(item.qty || 0) * Number(item.unit || 0);
+
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+
+      <td>
+
+        <input value="${escapeHtml(item.description)}"
+
+          onchange="updateItem(${index},'description',this.value)">
+
+      </td>
+
+      <td>
+
+        <input type="number" min="0" value="${item.qty}"
+
+          onchange="updateItem(${index},'qty',this.value)">
+
+      </td>
+
+      <td>
+
+        <input type="number" min="0" value="${item.unit}"
+
+          onchange="updateItem(${index},'unit',this.value)">
+
+      </td>
+
+      <td class="text-right">
+
+        ${yen(amount)}
+
+      </td>
+
+      <td>
+
+        <button class="btn-danger"
+
+          onclick="removeItem(${index})">
+
+          削除
+
+        </button>
+
+      </td>
+
+    `;
+
+    body.appendChild(tr);
+
+  });
+
+  updatePreview();
+
+}
+
+
+function updateItem(index,key,value) {
+
+  items[index][key] = key === "description"
+
+    ? value
+
+    : Number(value) || 0;
+
+  renderItems();
+
+}
+
+
+function removeItem(index) {
+
+  items.splice(index,1);
+
+  renderItems();
+
+}
+
+
+function yen(value) {
+
+  return Number(value || 0).toLocaleString("ja-JP") + "円";
+
+}
+
+
+function escapeHtml(value) {
+
+  return String(value ?? "")
+
+    .replace(/&/g,"&amp;")
+
+    .replace(/</g,"&lt;")
+
+    .replace(/>/g,"&gt;")
+
+    .replace(/"/g,"&quot;")
+
+    .replace(/'/g,"&#039;");
+
+}
+
+
+function getTotals() {
+
+  const subtotal = items.reduce(
+
+    (sum,item) =>
+
+      sum + Number(item.qty || 0) * Number(item.unit || 0),
+
+    0
+
+  );
+
+  const tax = Math.floor(subtotal * 0.10);
+
+  return {
+
+    subtotal,
+
+    tax,
+
+    total: subtotal + tax
+
+  };
+
+}
+
+
+function routeToHtml(route) {
+
+  if (!route.stops.length) {
+
+    return "";
+
+  }
+
+  return route.stops.map((stop,index) => {
+
+    const number = stop.no > 1 ? `①②③④⑤⑥⑦⑧⑨⑩`[stop.no-1] || stop.no : "";
+
+    const label = stop.kind + number;
+
+    return `
+
+      <div class="detail-main">
+
+        ${escapeHtml(label)}
+
+        ${stop.time ? " " + escapeHtml(stop.time) : ""}
+
+       　${escapeHtml(stop.name || "")}
+
+      </div>
+
+      <div class="detail-address">
+
+        ${escapeHtml(stop.address || "")}
+
+      </div>
+
+    `;
+
+  }).join("");
+
+}
+
+
+function buildRouteRows() {
+
+  if (!routes.length) {
+
+    return `
+
+      <tr>
+
+        <td colspan="6" style="text-align:center;padding:30px;">
+
+          往路・復路を追加してください
+
+        </td>
+
+      </tr>
+
+    `;
+
+  }
+
+  return routes.map(route => {
+
+    const firstCharge = route.stops.length
+
+      ? route.stops[0]
+
+      : null;
+
+    const detail = routeToHtml(route);
+
+    const routeDate = document.getElementById("docDate").value
+
+      ? formatDateShort(document.getElementById("docDate").value)
+
+      : "";
+
+    return `
+
+      <tr>
+
+        <td class="date-col">
+
+          ${escapeHtml(routeDate)}
+
+        </td>
+
+        <td class="type-col">
+
+          ${escapeHtml(route.type)}
+
+        </td>
+
+        <td class="detail-col">
+
+          ${detail}
+
+        </td>
+
+        <td class="qty-col number">
+
+          ${route.stops.length ? "1件" : ""}
+
+        </td>
+
+        <td class="unit-col number">
+
+          ${route === routes[0] && items[0]
+
+            ? yen(items[0].unit)
+
+            : ""
+
+          }
+
+        </td>
+
+        <td class="amount-col number">
+
+          ${route === routes[0] && items[0]
+
+            ? yen(items[0].qty * items[0].unit)
+
+            : ""
+
+          }
+
+        </td>
+
+      </tr>
+
+    `;
+
+  }).join("");
+
+}
+
+
+function formatDateShort(dateStr) {
+
+  if (!dateStr) return "";
+
+  const d = new Date(dateStr);
+
+  if (Number.isNaN(d.getTime())) return dateStr;
+
+  return `${d.getMonth()+1}/${d.getDate()}`;
+
+}
+
+
+function formatDateLong(dateStr) {
+
+  if (!dateStr) return "";
+
+  const d = new Date(dateStr);
+
+  if (Number.isNaN(d.getTime())) return dateStr;
+
+  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+
+}
+
+
+function updatePreview() {
+
+  const company = document.getElementById("customerCompany").value;
+
+  const dept = document.getElementById("customerDept").value;
+
+  const person = document.getElementById("customerPerson").value;
+
+  const subject = document.getElementById("subject").value;
+
+  const docDate = document.getElementById("docDate").value;
+
+  const docNumber = document.getElementById("docNumber").value;
+
+  const deadline = document.getElementById("deadline").value;
+
+  const cargo = document.getElementById("cargo").value;
+
+  const notes = document.getElementById("notes").value;
+
+  const totals = getTotals();
+
+  const bank = banks[document.getElementById("bank").value];
+
+  const title = docType === "quote" ? "御見積書" : "御請求書";
+
+  const dateLabel = docType === "quote" ? "見積日" : "請求日";
+
+  const deadlineLabel = docType === "quote" ? "有効期限" : "入金期日";
+
+  const finalLabel = docType === "quote" ? "見積金額" : "請求金額";
+
+  const bankHtml = bank.map(x =>
+
+    `<div class="bank-line">${escapeHtml(x)}</div>`
+
+  ).join("");
+
+  const noteText = notes
+
+    ? notes.replace(/\n/g,"<br>")
+
+    : "振込手数料はお客様にてご負担ください。";
+
+  document.getElementById("documentPreview").innerHTML = `
+
+    <div class="doc-top">
+
+      <div class="recipient">
+
+        <h3>${escapeHtml(company)} 御中</h3>
+
+        <div class="recipient-box">
+
+          <div class="recipient-row">
+
+            <div class="recipient-label">部署名</div>
+
+            <div class="recipient-value">
+
+              ${escapeHtml(dept)}
+
+            </div>
+
+          </div>
+
+        </div>
+
+        <div class="recipient-box">
+
+          <div class="recipient-row">
+
+            <div class="recipient-label">ご担当者</div>
+
+            <div class="recipient-value">
+
+              ${escapeHtml(person)}
+
+              ${person ? " 様" : ""}
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      <div class="company">
+
+        <div class="doc-title">${title}</div>
+
+        <div class="company-name">${companyInfo.name}</div>
+
+        <div class="company-line">${companyInfo.zip}</div>
+
+        <div class="company-line">${companyInfo.address}</div>
+
+        <div class="company-line">${companyInfo.building}</div>
+
+        <div class="company-line">${companyInfo.tel}</div>
+
+        <div class="company-line">${companyInfo.mail}</div>
+
+        <div class="company-line">${companyInfo.representative}</div>
+
+        <div class="company-line">${companyInfo.registration}</div>
+
+      </div>
+
+    </div>
+
+    <div class="doc-divider"></div>
+
+    <div class="subject-meta">
+
+      <div class="subject">
+
+        <span class="subject-label">件名</span>
+
+        ${escapeHtml(subject)}
+
+      </div>
+
+      <div class="meta">
+
+        <div class="meta-row">
+
+          <span>${dateLabel}</span>
+
+          <span>${formatDateLong(docDate)}</span>
+
+        </div>
+
+        <div class="meta-row">
+
+          <span>帳票番号</span>
+
+          <span>${escapeHtml(docNumber)}</span>
+
+        </div>
+
+        <div class="meta-row">
+
+          <span>${deadlineLabel}</span>
+
+          <span>${formatDateLong(deadline)}</span>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <table class="doc-table">
+
+      <thead>
+
+        <tr>
+
+          <th class="date-col">
+
+            ${docType === "quote" ? "日付" : "取引日"}
+
+          </th>
+
+          <th class="type-col">区分</th>
+
+          <th class="detail-col">
+
+            概要（搬出・搬入先／住所）
+
+          </th>
+
+          <th class="qty-col">数量</th>
+
+          <th class="unit-col">単価</th>
+
+          <th class="amount-col">金額</th>
+
+        </tr>
+
+      </thead>
+
+      <tbody>
+
+        ${buildRouteRows()}
+
+      </tbody>
+
+    </table>
+
+    <div class="doc-item">
+
+      <strong>運搬品：</strong>
+
+      ${escapeHtml(cargo)}
+
+    </div>
+
+    <div class="bottom-grid">
+
+      <div class="bottom-box">
+
+        <div class="bottom-title">
+
+          ${docType === "invoice" ? "振込先" : "備考"}
+
+        </div>
+
+        ${docType === "invoice"
+
+          ? bankHtml
+
+          : `
+
+            <div class="note-line">
+
+              待機料金：予定時刻より30分以内 1,650円（税込）、
+
+              以降30分ごとに1,650円（税込）を加算いたします。
+
+            </div>
+
+            <div class="note-line">
+
+              金額変動：作業内容・物量・スケジュール等の変更により、
+
+              金額が変動する場合がございます。
+
+            </div>
+
+            <div class="note-line">
+
+              振込手数料はお客様にてご負担ください。
+
+            </div>
+
+          `
+
+        }
+
+      </div>
+
+      <div class="bottom-box">
+
+        <div class="total-row">
+
+          <span>小計</span>
+
+          <span>${yen(totals.subtotal)}</span>
+
+        </div>
+
+        <div class="total-row">
+
+          <span>消費税（10%）</span>
+
+          <span>${yen(totals.tax)}</span>
+
+        </div>
+
+        <div class="total-final">
+
+          <span>${finalLabel}</span>
+
+          <span style="float:right">
+
+            ${yen(totals.total)}
+
+          </span>
+
+        </div>
+
+        ${docType === "invoice"
+
+          ? `
+
+            <div class="invoice-note">
+
+              <div class="note-line">
+
+                備考
+
+              </div>
+
+              <div class="note-line">
+
+                ${noteText}
+
+              </div>
+
+            </div>
+
+          `
+
+          : ""
+
+        }
+
+      </div>
+
+    </div>
+
+    <div class="doc-footer">
+
+      ${companyInfo.name}
+
+    </div>
+
+  `;
+
+}
+
+
+function resetForm() {
+
+  if (!confirm("入力内容をリセットしますか？")) {
+
+    return;
+
+  }
+
+  document.querySelectorAll("input,textarea").forEach(el => {
+
+    if (el.id === "customerCompany") {
+
+      el.value = "株式会社プライマルヴェニュー";
+
+    } else {
+
+      el.value = "";
+
+    }
+
+  });
+
+  routes = [];
+
+  items = [];
+
+  renderRoutes();
+
+  renderItems();
+
+  updatePreview();
+
+}
+
+
+document.addEventListener("input", () => {
+
+  updatePreview();
+
+});
+
+
+document.getElementById("bank").addEventListener("change", updatePreview);
+
+
+// Initial
+addRoute("往路");
+addItem();
+updatePreview();
+
+</script>
+
+</body>
+</html>
