@@ -611,7 +611,7 @@ button {
       プレビュー更新
     </button>
 
-    <button class="btn-main" onclick="window.print()">
+   <button class="btn-main" onclick="printAndAdvance()">
       PDF保存・印刷
     </button>
 
@@ -1590,6 +1590,19 @@ function updatePreview() {
 
 }
 
+function printAndAdvance() {
+
+  const numberKey = docType === "quote"
+    ? "311banchi_quote_number"
+    : "311banchi_invoice_number";
+
+  const currentNumber =
+    Number(localStorage.getItem(numberKey) || 0) + 1;
+
+  localStorage.setItem(numberKey, currentNumber);
+
+  window.print();
+}
 
 function resetForm() {
 
@@ -1645,7 +1658,20 @@ const dd = String(today.getDate()).padStart(2, "0");
 
 document.getElementById("docDate").value =
   `${yyyy}-${mm}-${dd}`;
+// 帳票番号を表示（まだ番号は進めない）
+const numberKey = docType === "quote"
+  ? "311banchi_quote_number"
+  : "311banchi_invoice_number";
 
+const numberPrefix = docType === "quote"
+  ? "Q-"
+  : "INV-";
+
+const previewNumber =
+  Number(localStorage.getItem(numberKey) || 0) + 1;
+
+document.getElementById("docNumber").value =
+  numberPrefix + String(previewNumber).padStart(10, "0");
 addRoute("往路");
 addItem();
 updatePreview();
