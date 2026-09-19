@@ -1273,6 +1273,18 @@ function deleteInvoiceLedger(index) {
 
 function printAndAdvance() {
   updatePreview();
+
+  // 入力された案件名・会社名・番号・種別を取得
+  const subject = document.getElementById("subject").value.trim() || "案件名なし";
+  const customer = document.getElementById("customerCompany").value.trim() || "取引先";
+  const docNumber = document.getElementById("docNumber").value.trim();
+  const typeName = docType === "quote" ? "見積書" : "請求書";
+
+  // 元のタイトルを退避し、保存用のファイル名に変更
+  const originalTitle = document.title;
+  // 例: 【展示会搬送】株式会社サンプル_御請求書_INV-0000000409
+  document.title = `【${subject}】${customer}_${typeName}_${docNumber}`;
+
   const { numberKey, nextNumber } = getNumberInfo();
   const enteredNumber = Number((document.getElementById("docNumber").value || "").replace(/\D/g, ""));
   const issuedNumber = Math.max(enteredNumber || nextNumber, initialLastNumbers[docType]);
@@ -1280,6 +1292,9 @@ function printAndAdvance() {
   localStorage.setItem(numberKey, String(issuedNumber));
 
   window.print();
+
+  // 印刷ダイアログを閉じたらタイトルを元に戻す
+  document.title = originalTitle;
 
   setNextDocumentNumber();
   updatePreview();
