@@ -218,7 +218,8 @@ button {
   display: grid;
   grid-template-columns: 1.15fr .9fr;
   gap: 35px;
-  margin-bottom: 22px;
+  margin-bottom: 18px;
+  align-items: start;
 }
 
 .recipient h3 {
@@ -249,6 +250,8 @@ button {
 
 .company {
   text-align: right;
+  align-self: start;
+  margin-top: 0;
 }
 
 .doc-title {
@@ -437,10 +440,10 @@ button {
 @media print {
   html,
   body {
-    width: 210mm;
-    height: 297mm;
     margin: 0;
     padding: 0;
+    width: 210mm;
+    height: 297mm;
     overflow: hidden;
     background: #fff;
   }
@@ -454,28 +457,29 @@ button {
     visibility: visible;
   }
 
+  /* 印刷時は画面プレビューと同じ1120×1580pxの帳票を、そのまま同じ比率でA4縦へ縮小 */
   #printArea {
     position: absolute;
     left: 0;
     top: 0;
-    width: 210mm;
-    height: 297mm;
+    width: 1120px;
+    height: 1580px;
     margin: 0;
     padding: 0;
     overflow: visible;
+    background: #fff;
   }
 
-  /* 1120×1580pxの帳票をChromeのレイアウト計算ごとA4縦に縮小。
-     transformではなくzoomを使い、余計な2ページ目が発生しないようにする。 */
-  .document {
-    width: 862px;
-    min-height: 0;
-    height: 1220px;
+  #printArea .document {
+    width: 1120px;
+    min-height: 1580px;
+    height: 1580px;
     margin: 0;
-    padding: 36px;
+    padding: 45px;
     box-sizing: border-box;
     box-shadow: none;
-    zoom: 0.92;
+    /* 1120pxをA4幅210mmへ、1ページ内で縦横同じ比率で縮小 */
+    zoom: 0.70866;
     overflow: visible;
   }
 }
