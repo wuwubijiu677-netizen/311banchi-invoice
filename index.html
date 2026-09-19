@@ -1,4 +1,3 @@
-```
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -206,12 +205,15 @@ button {
 }
 
 .document {
-  width: 1120px;
-  min-height: 1580px;
+  width: 1123px;
+  min-height: 794px;
+  height: 794px;
   margin: 0 auto;
   background: #fff;
   padding: 45px;
   color: #111;
+  position: relative;
+  overflow: hidden;
 }
 
 .doc-top {
@@ -407,7 +409,10 @@ button {
 }
 
 .doc-footer {
-  margin-top: 30px;
+  position: absolute;
+  left: 45px;
+  bottom: 18px;
+  margin: 0;
   font-size: 11px;
 }
 
@@ -433,54 +438,46 @@ button {
 }
 
 @page {
-  size: A4 portrait;
+  size: A4 landscape;
   margin: 0;
 }
 
 @media print {
-  html,
-  body {
+  html, body {
     margin: 0;
     padding: 0;
-    width: 210mm;
-    height: 297mm;
+    width: 297mm;
+    height: 210mm;
     overflow: hidden;
     background: #fff;
   }
 
-  body * {
-    visibility: hidden;
-  }
+  body * { visibility: hidden; }
+  #printArea, #printArea * { visibility: visible; }
 
-  #printArea,
-  #printArea * {
-    visibility: visible;
-  }
-
-  /* 印刷時は画面プレビューと同じ1120×1580pxの帳票を、そのまま同じ比率でA4縦へ縮小 */
   #printArea {
     position: absolute;
     left: 0;
     top: 0;
-    width: 1120px;
-    height: 1580px;
+    width: 1123px;
+    height: 794px;
     margin: 0;
     padding: 0;
-    overflow: visible;
+    overflow: hidden;
     background: #fff;
   }
 
   #printArea .document {
-    width: 1120px;
-    min-height: 1580px;
-    height: 1580px;
+    width: 1123px;
+    height: 794px;
+    min-height: 794px;
     margin: 0;
     padding: 45px;
     box-sizing: border-box;
     box-shadow: none;
-    /* 1120pxをA4幅210mmへ、1ページ内で縦横同じ比率で縮小 */
-    zoom: 0.70866;
-    overflow: visible;
+    overflow: hidden;
+    transform: none;
+    zoom: 1;
   }
 }
 </style>
