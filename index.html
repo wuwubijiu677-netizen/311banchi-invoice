@@ -857,6 +857,7 @@ function addRoute(type) {
   const route = {
 
     type,
+    date: document.getElementById("docDate").value || "",
 
     stops: type === "往路"
 
@@ -884,7 +885,6 @@ function addRoute(type) {
 
 }
 
-
 function renderRoutes() {
 
   const box = document.getElementById("routes");
@@ -910,7 +910,12 @@ function renderRoutes() {
         </button>
 
       </div>
-
+<div class="route-date-row">
+  <label>作業日</label>
+  <input type="date"
+    value="${escapeHtml(route.date || "")}"
+    onchange="updateRouteDate(${routeIndex}, this.value)">
+</div>
       <div id="routeStops${routeIndex}"></div>
 
       <div class="button-row">
@@ -939,7 +944,15 @@ function renderRoutes() {
 
 }
 
+function updateRouteDate(routeIndex, value) {
 
+  if (!routes[routeIndex]) return;
+
+  routes[routeIndex].date = value;
+
+  updatePreview();
+
+}
 function renderStops(routeIndex) {
 
   const route = routes[routeIndex];
@@ -1310,11 +1323,9 @@ function buildRouteRows() {
 
     const detail = routeToHtml(route);
 
-    const routeDate = document.getElementById("docDate").value
-
-      ? formatDateShort(document.getElementById("docDate").value)
-
-      : "";
+    const routeDate = route.date
+  ? formatDateShort(route.date)
+  : "";
 
     return `
 
