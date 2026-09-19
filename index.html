@@ -274,7 +274,7 @@ button {
 
 .subject-meta {
   display: grid;
-  grid-template-columns: 1fr 360px;
+  grid-template-columns: 1fr 390px;
   gap: 20px;
   align-items: start;
   margin-bottom: 20px;
@@ -296,12 +296,15 @@ button {
 
 .meta-row {
   display: grid;
-  grid-template-columns: 100px 1fr;
-  margin-bottom: 5px;
+  grid-template-columns: 90px 1fr;
+  column-gap: 10px;
+  margin-bottom: 7px;
+  align-items: start;
 }
 
 .meta-row span:last-child {
-  text-align: right;
+  text-align: left;
+  white-space: nowrap;
 }
 
 .doc-table {
@@ -689,6 +692,80 @@ let routes = [];
 
 let items = [];
 
+let autoInvoiceDeadline = false;
+
+// これまで発行した最後の番号。
+// 初回だけこの番号を基準にして、以降はブラウザのlocalStorageで管理します。
+const initialLastNumbers = {
+  quote: 333,
+  invoice: 408
+};
+
+function getNumberInfo() {
+  const numberKey = docType === "quote"
+    ? "311banchi_quote_number"
+    : "311banchi_invoice_number";
+
+  const numberPrefix = docType === "quote"
+    ? "Q-"
+    : "INV-";
+
+  const stored = localStorage.getItem(numberKey);
+
+  const parsedNumber = stored === null
+    ? initialLastNumbers[docType]
+    : (Number(stored) || 0);
+
+  const lastNumber = Math.max(
+    parsedNumber,
+    initialLastNumbers[docType]
+  );
+
+  return {
+    numberKey,
+    numberPrefix,
+    lastNumber,
+    nextNumber: lastNumber + 1
+  };
+}
+
+function setNextDocumentNumber() {
+  const { numberPrefix, nextNumber } = getNumberInfo();
+
+  document.getElementById("docNumber").value =
+    numberPrefix + String(nextNumber).padStart(10, "0");
+}
+
+function getMonthEndDate(dateStr) {
+  const base = dateStr
+    ? new Date(dateStr + "T00:00:00")
+    : new Date();
+
+  if (Number.isNaN(base.getTime())) return "";
+
+  const lastDay = new Date(
+    base.getFullYear(),
+    base.getMonth() + 1,
+    0
+  );
+
+  const y = lastDay.getFullYear();
+  const m = String(lastDay.getMonth() + 1).padStart(2, "0");
+  const d = String(lastDay.getDate()).padStart(2, "0");
+
+  return `${y}-${m}-${d}`;
+}
+
+function setInvoiceDeadlineFromDocDate() {
+  if (docType !== "invoice") return;
+
+  const docDate = document.getElementById("docDate").value;
+  document.getElementById("deadline").value =
+    getMonthEndDate(docDate);
+
+  autoInvoiceDeadline = true;
+}
+
 
 const companyInfo = {
 
@@ -738,6 +815,10 @@ const banks = {
 
 function setDocType(type) {
 
+  if (docType === "invoice" && type === "quote" && autoInvoiceDeadline) {
+    document.getElementById("deadline").value = "";
+  }
+
   docType = type;
 
   document.getElementById("quoteBtn")
@@ -752,13 +833,19 @@ function setDocType(type) {
 
     document.getElementById("deadlineLabel").textContent = "有効期限";
 
+    autoInvoiceDeadline = false;
+
   } else {
 
     document.getElementById("dateLabel").textContent = "請求日";
 
     document.getElementById("deadlineLabel").textContent = "入金期日";
 
+    setInvoiceDeadlineFromDocDate();
+
   }
+
+  setNextDocumentNumber();
 
   updatePreview();
 
@@ -1462,7 +1549,7 @@ function updatePreview() {
 
         <div class="meta-row">
 
-          <span>帳票番号</span>
+          <span>${docType === "quote" ? "見積書番号" : "請求書番号"}</span>
 
           <span>${escapeHtml(docNumber)}</span>
 
@@ -1640,39 +1727,233 @@ function updatePreview() {
 
 }
 
+
+function getInvoiceLedger() {
+  try {
+    const saved =
+      JSON.parse(localStorage.getItem("311banchi_invoice_ledger") || "[]");
+
+    return Array.isArray(saved) ? saved : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveInvoiceLedger(ledger) {
+  localStorage.setItem(
+    "311banchi_invoice_ledger",
+    JSON.stringify(ledger)
+  );
+}
+
+function registerCurrentInvoice() {
+  if (docType !== "invoice") {
+    alert("請求書に切り替えてから登録してください。");
+    return;
+  }
+
+  const invoiceNumber =
+    document.getElementById("docNumber").value.trim();
+
+  const invoiceDate =
+    document.getElementById("docDate").value;
+
+  const customer =
+    document.getElementById("customerCompany").value.trim();
+
+  const subject =
+    document.getElementById("subject").value.trim();
+
+  const deadline =
+    document.getElementById("deadline").value;
+
+  const amount = getTotals().total;
+
+  if (!invoiceNumber || !invoiceDate || !customer || !subject || !deadline) {
+    alert("請求日・請求書番号・取引先・案件名・入金期日を入力してください。");
+    return;
+  }
+
+  const ledger = getInvoiceLedger();
+
+  const record = {
+    invoiceNumber,
+    invoiceDate,
+    customer,
+    subject,
+    amount,
+    deadline,
+    freeeStatus: "未登録",
+    paymentStatus: "未入金"
+  };
+
+  const existingIndex =
+    ledger.findIndex(x => x.invoiceNumber === invoiceNumber);
+
+  if (existingIndex >= 0) {
+    record.freeeStatus =
+      ledger[existingIndex].freeeStatus || "未登録";
+
+    record.paymentStatus =
+      ledger[existingIndex].paymentStatus || "未入金";
+
+    ledger[existingIndex] = record;
+
+    saveInvoiceLedger(ledger);
+    showInvoiceLedger();
+    alert("請求管理台帳を更新しました。");
+    return;
+  }
+
+  ledger.unshift(record);
+
+  saveInvoiceLedger(ledger);
+  showInvoiceLedger();
+
+  alert("請求管理台帳に登録しました。");
+}
+
+function showInvoiceLedger() {
+  const body =
+    document.getElementById("invoiceLedgerBody");
+
+  if (!body) return;
+
+  const ledger = getInvoiceLedger();
+
+  if (!ledger.length) {
+    body.innerHTML = `
+      <tr>
+        <td colspan="9" style="text-align:center;padding:20px;">
+          まだ請求書が登録されていません。
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  body.innerHTML = ledger.map((row, index) => `
+    <tr>
+      <td>${escapeHtml(row.invoiceNumber)}</td>
+      <td>${escapeHtml(formatDateLong(row.invoiceDate))}</td>
+      <td>${escapeHtml(row.customer)}</td>
+      <td>${escapeHtml(row.subject)}</td>
+      <td class="text-right">${yen(row.amount)}</td>
+      <td>${escapeHtml(formatDateLong(row.deadline))}</td>
+      <td>
+        <select
+          onchange="updateInvoiceLedgerStatus(${index}, 'freeeStatus', this.value)"
+        >
+          <option value="未登録" ${row.freeeStatus === "未登録" ? "selected" : ""}>未登録</option>
+          <option value="登録済" ${row.freeeStatus === "登録済" ? "selected" : ""}>登録済</option>
+        </select>
+      </td>
+      <td>
+        <select
+          onchange="updateInvoiceLedgerStatus(${index}, 'paymentStatus', this.value)"
+        >
+          <option value="未入金" ${row.paymentStatus === "未入金" ? "selected" : ""}>未入金</option>
+          <option value="入金済" ${row.paymentStatus === "入金済" ? "selected" : ""}>入金済</option>
+        </select>
+      </td>
+      <td>
+        <button class="btn-danger" onclick="deleteInvoiceLedger(${index})">
+          削除
+        </button>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function updateInvoiceLedgerStatus(index, key, value) {
+  const ledger = getInvoiceLedger();
+
+  if (!ledger[index]) return;
+
+  if (key !== "freeeStatus" && key !== "paymentStatus") return;
+
+  ledger[index][key] = value;
+
+  saveInvoiceLedger(ledger);
+  showInvoiceLedger();
+}
+
+function deleteInvoiceLedger(index) {
+  const ledger = getInvoiceLedger();
+
+  if (!ledger[index]) return;
+
+  if (!confirm(
+    `請求書 ${ledger[index].invoiceNumber} を台帳から削除しますか？`
+  )) {
+    return;
+  }
+
+  ledger.splice(index, 1);
+
+  saveInvoiceLedger(ledger);
+  showInvoiceLedger();
+}
+
 function printAndAdvance() {
 
-  const numberKey = docType === "quote"
-    ? "311banchi_quote_number"
-    : "311banchi_invoice_number";
+  const { numberKey, nextNumber } = getNumberInfo();
 
-  const currentNumber =
-    Number(localStorage.getItem(numberKey) || 0) + 1;
+  const enteredNumber =
+    Number(
+      (document.getElementById("docNumber").value || "")
+        .replace(/\D/g, "")
+    );
 
-  localStorage.setItem(numberKey, currentNumber);
+  const issuedNumber = Math.max(
+    enteredNumber || nextNumber,
+    initialLastNumbers[docType]
+  );
+
+  localStorage.setItem(numberKey, String(issuedNumber));
 
   window.print();
+
+  // 印刷ダイアログを閉じたら次の番号を表示
+  setNextDocumentNumber();
+
+  updatePreview();
 }
+
 
 function resetForm() {
 
   if (!confirm("入力内容をリセットしますか？")) {
-
     return;
-
   }
 
- document.querySelectorAll("input,textarea").forEach(el => {
-  el.value = "";
-});
+  document.querySelectorAll("input,textarea").forEach(el => {
+    el.value = "";
+  });
+
+  document.getElementById("cargo").value = "イベント備品";
 
   routes = [];
-
   items = [];
 
   renderRoutes();
-
   renderItems();
+
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
+
+  document.getElementById("docDate").value =
+    `${yyyy}-${mm}-${dd}`;
+
+  if (docType === "invoice") {
+    setInvoiceDeadlineFromDocDate();
+  } else {
+    document.getElementById("deadline").value = "";
+  }
+
+  setNextDocumentNumber();
 
   updatePreview();
 
@@ -1688,6 +1969,26 @@ document.addEventListener("input", () => {
 
 document.getElementById("bank").addEventListener("change", updatePreview);
 
+document.getElementById("docDate").addEventListener("change", () => {
+
+  if (docType === "invoice" && autoInvoiceDeadline) {
+    setInvoiceDeadlineFromDocDate();
+  }
+
+  updatePreview();
+
+});
+
+document.getElementById("deadline").addEventListener("change", () => {
+
+  if (docType === "invoice") {
+    autoInvoiceDeadline = false;
+  }
+
+  updatePreview();
+
+});
+
 
 // Initial
 
@@ -1698,23 +1999,15 @@ const dd = String(today.getDate()).padStart(2, "0");
 
 document.getElementById("docDate").value =
   `${yyyy}-${mm}-${dd}`;
-// 帳票番号を表示（まだ番号は進めない）
-const numberKey = docType === "quote"
-  ? "311banchi_quote_number"
-  : "311banchi_invoice_number";
 
-const numberPrefix = docType === "quote"
-  ? "Q-"
-  : "INV-";
+setNextDocumentNumber();
 
-const previewNumber =
-  Number(localStorage.getItem(numberKey) || 0) + 1;
-
-document.getElementById("docNumber").value =
-  numberPrefix + String(previewNumber).padStart(10, "0");
 addRoute("往路");
 addItem();
+
 updatePreview();
+showInvoiceLedger();
+
 
 </script>
 
