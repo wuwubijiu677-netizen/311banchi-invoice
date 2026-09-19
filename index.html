@@ -98,6 +98,12 @@ button {
   color: #fff;
 }
 
+.btn-ai {
+  background: #1a73e8;
+  color: #fff;
+  font-weight: bold;
+}
+
 .btn-sub {
   background: #e9eaec;
   color: #222;
@@ -196,6 +202,29 @@ button {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+/* AIチェック結果カード */
+.ai-box {
+  background: #fdfdfd;
+  border: 1px solid #cce5ff;
+  border-radius: 10px;
+  padding: 16px;
+  margin-top: 15px;
+}
+.ai-box h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  color: #004085;
+}
+.ai-result {
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  background: #fff;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
 }
 
 .preview-wrap {
@@ -495,6 +524,20 @@ button {
 
   <h1>311BANCHI 見積・請求書作成</h1>
 
+  <!-- AI APIキー設定パネル -->
+  <div class="panel">
+    <h2>🤖 AIアシスタント設定</h2>
+    <div class="row">
+      <div class="field" style="grid-column: span 2;">
+        <label>Gemini API キー (ブラウザに安全に保存されます)</label>
+        <div style="display:flex; gap:10px;">
+          <input type="password" id="geminiApiKey" placeholder="AIzaSy...">
+          <button class="btn-sub" type="button" onclick="saveApiKey()">キー保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="panel">
     <h2>帳票種類</h2>
     <div class="type-switch">
@@ -573,7 +616,7 @@ button {
       </div>
       <div class="field">
         <label>備考</label>
-        <textarea id="notes" placeholder="追加したい備考を入力（※「振込手数料はお客様にてご負担ください。」は自動で併記されます）"></textarea>
+        <textarea id="notes" placeholder="追加したい備考を入力（※「振込手数料はお客様にてご負担ください。」は自動併記されます）"></textarea>
       </div>
     </div>
     <div class="table-wrap">
@@ -602,9 +645,16 @@ button {
   </div>
 
   <div class="actions">
+    <button class="btn-ai" type="button" onclick="runAICheck()">🤖 AIミスチェックを実行</button>
     <button class="btn-main" onclick="updatePreview()">プレビュー更新</button>
     <button class="btn-main" onclick="printAndAdvance()">PDF保存・印刷</button>
     <button class="btn-sub" onclick="resetForm()">入力内容をリセット</button>
+  </div>
+
+  <!-- AIチェック結果表示エリア -->
+  <div id="aiBox" class="ai-box" style="display:none;">
+    <h3>🔍 AI診断レポート</h3>
+    <div id="aiResult" class="ai-result"></div>
   </div>
 
 </div>
@@ -657,6 +707,17 @@ const initialLastNumbers = {
   quote: 333,
   invoice: 408
 };
+
+// APIキー管理
+function saveApiKey() {
+  const key = document.getElementById("geminiApiKey").value.trim();
+  localStorage.setItem("311banchi_gemini_key", key);
+  alert("APIキーを保存しました。");
+}
+function loadApiKey() {
+  const key = localStorage.getItem("311banchi_gemini_key") || "";
+  document.getElementById("geminiApiKey").value = key;
+}
 
 function getNumberInfo() {
   const numberKey = docType === "quote"
@@ -1041,7 +1102,6 @@ function updatePreview() {
   const allBanks = [...banks.smbc, ...banks.gmo, ...extraBanks.map(x => x.trim()).filter(x => x !== "")];
   const bankHtml = allBanks.map(x => `<div class="bank-line">${escapeHtml(x).replace(/\n/g, "<br>")}</div>`).join("");
 
-  // 「振込手数料はお客様にてご負担ください。」は常時保持し、入力テキストを追加で表示
   const defaultFeeNote = "振込手数料はお客様にてご負担ください。";
   const extraNoteHtml = notes ? `<div class="note-line" style="margin-top:3px;">${escapeHtml(notes).replace(/\n/g, "<br>")}</div>` : "";
 
@@ -1156,6 +1216,75 @@ function updatePreview() {
     </div>
     <div class="doc-footer">${companyInfo.name}</div>
   `;
+}
+
+// AIミスチェック実行処理
+async function runAICheck() {
+  const apiKey = document.getElementById("geminiApiKey").value.trim();
+  if (!apiKey) {
+    alert("上部の「AIアシスタント設定」に Gemini API キーを入力してください。");
+    return;
+  }
+
+  const aiBox = document.getElementById("aiBox");
+  const aiResult = document.getElementById("aiResult");
+  aiBox.style.display = "block";
+  aiResult.textContent = "AIが入力内容を解析中...しばらくお待ちください。";
+
+  // 送信データの集約
+  const payloadData = {
+    帳票種別: docType === "quote" ? "見積書" : "請求書",
+    取引先会社名: document.getElementById("customerCompany").value.trim(),
+    部署: document.getElementById("customerDept").value.trim(),
+    担当者: document.getElementById("customerPerson").value.trim(),
+    案件名: document.getElementById("subject").value.trim(),
+    郵便番号: document.getElementById("customerZip").value.trim(),
+    住所: document.getElementById("customerAddress").value.trim(),
+    建物名: document.getElementById("customerBuilding").value.trim(),
+    発行日: document.getElementById("docDate").value,
+    期日: document.getElementById("deadline").value,
+    帳票番号: document.getElementById("docNumber").value,
+    運搬品: document.getElementById("cargo").value,
+    備考: document.getElementById("notes").value,
+    運搬ルート: routes,
+    明細: items,
+    合計金額: getTotals().total
+  };
+
+  const prompt = `あなたは物流・運送業（合同会社311BANCHI）の帳票（見積書・請求書）を精査するプロのアシスタントです。
+以下の入力データを確認し、ミスや違和感、記載漏れ、日付の矛盾がないかをプロの目線でチェックしてください。
+
+【データ】
+${JSON.stringify(payloadData, null, 2)}
+
+【チェック観点】
+1. 日付の前後関係（発行日と支払期日、作業日の矛盾がないか）
+2. 必須項目の漏れ（会社名、案件名、金額が0円など）
+3. 運搬ルートの搬出・搬入先や住所・日時の整合性
+4. 誤字脱字、敬語の違和感、住所や郵便番号の形式不備
+5. その他取引先へ送るにあたって懸念される事項
+
+問題がなければ「問題は見当たりませんでした」と伝え、修正すべき点や確認すべき点があれば箇条書きで分かりやすくアドバイスしてください。`;
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }]
+      })
+    });
+
+    if (!res.ok) {
+      throw new Error(`APIエラー: HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    aiResult.textContent = reply || "チェック結果を取得できませんでした。";
+  } catch (err) {
+    aiResult.textContent = `チェック中にエラーが発生しました:\n${err.message}\n※APIキーが有効か、通信制限がかかっていないかご確認ください。`;
+  }
 }
 
 function getInvoiceLedger() {
@@ -1274,15 +1403,13 @@ function deleteInvoiceLedger(index) {
 function printAndAdvance() {
   updatePreview();
 
-  // 入力された案件名・会社名・番号・種別を取得
+  // PDF保存時のファイル名に案件名・会社名・番号を自動セット
   const subject = document.getElementById("subject").value.trim() || "案件名なし";
   const customer = document.getElementById("customerCompany").value.trim() || "取引先";
   const docNumber = document.getElementById("docNumber").value.trim();
-  const typeName = docType === "quote" ? "見積書" : "請求書";
+  const typeName = docType === "quote" ? "御見積書" : "御請求書";
 
-  // 元のタイトルを退避し、保存用のファイル名に変更
   const originalTitle = document.title;
-  // 例: 【展示会搬送】株式会社サンプル_御請求書_INV-0000000409
   document.title = `【${subject}】${customer}_${typeName}_${docNumber}`;
 
   const { numberKey, nextNumber } = getNumberInfo();
@@ -1293,7 +1420,6 @@ function printAndAdvance() {
 
   window.print();
 
-  // 印刷ダイアログを閉じたらタイトルを元に戻す
   document.title = originalTitle;
 
   setNextDocumentNumber();
@@ -1302,7 +1428,9 @@ function printAndAdvance() {
 
 function resetForm() {
   if (!confirm("入力内容をリセットしますか？")) return;
-  document.querySelectorAll("input,textarea").forEach(el => el.value = "");
+  document.querySelectorAll("input,textarea").forEach(el => {
+    if (el.id !== "geminiApiKey") el.value = "";
+  });
   document.getElementById("cargo").value = "イベント備品";
 
   routes = [];
@@ -1325,6 +1453,8 @@ function resetForm() {
     document.getElementById("deadline").value = "";
   }
 
+  document.getElementById("aiBox").style.display = "none";
+
   setNextDocumentNumber();
   updatePreview();
 }
@@ -1339,6 +1469,8 @@ document.getElementById("deadline").addEventListener("change", () => {
   updatePreview();
 });
 
+// 初期化
+loadApiKey();
 const today = new Date();
 const yyyy = today.getFullYear();
 const mm = String(today.getMonth() + 1).padStart(2, "0");
