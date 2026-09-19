@@ -447,14 +447,14 @@ button {
     overflow: hidden !important;
   }
 
- /* プレビュー以外の操作UI・見出しを完全非表示 */
-.container,
-.panel,
-.actions,
-#invoiceLedgerPanel,
-.preview-panel-wrap h2 {
-  display: none !important;
-}
+  /* プレビュー以外の操作UI・見出しを完全非表示 */
+  .container,
+  .panel,
+  .actions,
+  #invoiceLedgerPanel,
+  .preview-panel-wrap h2 {
+    display: none !important;
+  }
 
   .preview-panel-wrap {
     margin: 0 !important;
@@ -573,7 +573,7 @@ button {
       </div>
       <div class="field">
         <label>備考</label>
-        <textarea id="notes"></textarea>
+        <textarea id="notes" placeholder="追加したい備考を入力（※「振込手数料はお客様にてご負担ください。」は自動で併記されます）"></textarea>
       </div>
     </div>
     <div class="table-wrap">
@@ -1029,7 +1029,7 @@ function updatePreview() {
   const docNumber = document.getElementById("docNumber").value;
   const deadline = document.getElementById("deadline").value;
   const cargo = document.getElementById("cargo").value;
-  const notes = document.getElementById("notes").value;
+  const notes = document.getElementById("notes").value.trim();
   const companyName = company.trim();
 
   const totals = getTotals();
@@ -1040,7 +1040,10 @@ function updatePreview() {
 
   const allBanks = [...banks.smbc, ...banks.gmo, ...extraBanks.map(x => x.trim()).filter(x => x !== "")];
   const bankHtml = allBanks.map(x => `<div class="bank-line">${escapeHtml(x).replace(/\n/g, "<br>")}</div>`).join("");
-  const noteText = notes ? notes.replace(/\n/g,"<br>") : "振込手数料はお客様にてご負担ください。";
+
+  // 「振込手数料はお客様にてご負担ください。」は常時保持し、入力テキストを追加で表示
+  const defaultFeeNote = "振込手数料はお客様にてご負担ください。";
+  const extraNoteHtml = notes ? `<div class="note-line" style="margin-top:3px;">${escapeHtml(notes).replace(/\n/g, "<br>")}</div>` : "";
 
   document.getElementById("documentPreview").innerHTML = `
     <div class="doc-top">
@@ -1127,7 +1130,7 @@ function updatePreview() {
         ${docType === "invoice" ? bankHtml : `
           <div class="note-line">待機料金：予定時刻より30分以内 1,650円（税込）、以降30分ごとに1,650円（税込）を加算いたします。</div>
           <div class="note-line">金額変動：作業内容・物量・スケジュール等の変更により、金額が変動する場合がございます。</div>
-          <div class="note-line">振込手数料はお客様にてご負担ください。</div>
+          <div class="note-line">${defaultFeeNote}</div>${extraNoteHtml}
         `}
       </div>
       <div class="bottom-box">
@@ -1146,7 +1149,7 @@ function updatePreview() {
         ${docType === "invoice" ? `
           <div class="invoice-note">
             <div class="note-line">備考</div>
-            <div class="note-line">${noteText}</div>
+            <div class="note-line">${defaultFeeNote}</div>${extraNoteHtml}
           </div>
         ` : ""}
       </div>
