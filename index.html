@@ -1383,7 +1383,20 @@ function buildRouteRows() {
 
     const detail = routeToHtml(route);
 
-    const routeDate = route.date
+const summaryHtml =
+  route === routes[0]
+    ? items
+        .map(item => item.description?.trim())
+        .filter(text => text)
+        .map(text => `
+          <div class="detail-summary">
+            ${escapeHtml(text)}
+          </div>
+        `)
+        .join("")
+    : "";
+
+const routeDate = route.date
   ? formatDateShort(route.date)
   : "";
 
@@ -1406,7 +1419,8 @@ function buildRouteRows() {
         <td class="detail-col">
 
           ${detail}
-
+　 　　　　${summaryHtml}
+     
         </td>
 
         <td class="qty-col number">
