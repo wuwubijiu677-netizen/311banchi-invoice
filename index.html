@@ -429,8 +429,19 @@ button {
   }
 }
 
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
 @media print {
+  html,
   body {
+    width: 210mm;
+    height: 297mm;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
     background: #fff;
   }
 
@@ -447,15 +458,24 @@ button {
     position: absolute;
     left: 0;
     top: 0;
-    width: 100%;
+    width: 210mm;
+    height: 297mm;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
   }
 
   .document {
-    width: 100%;
-    min-height: auto;
+    width: 1120px;
+    min-height: 1580px;
+    height: 1580px;
     margin: 0;
-    padding: 15mm;
+    padding: 45px;
     box-shadow: none;
+    zoom: 0.7071;
+    transform: none;
+    transform-origin: top left;
+    overflow: hidden;
   }
 }
 </style>
