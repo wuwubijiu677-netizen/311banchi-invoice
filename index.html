@@ -1,4 +1,3 @@
-```
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -206,12 +205,13 @@ button {
 }
 
 .document {
-  width: 1123px;
-  min-height: 794px;
-  height: 794px;
+  width: 297mm;
+  min-height: 210mm;
+  height: 210mm;
   margin: 0 auto;
   background: #fff;
   padding: 34px 45px 36px;
+  box-sizing: border-box;
   color: #111;
   position: relative;
   overflow: hidden;
@@ -461,8 +461,8 @@ button {
     position: absolute;
     left: 0;
     top: 0;
-    width: 1123px;
-    height: 794px;
+    width: 297mm;
+    height: 210mm;
     margin: 0;
     padding: 0;
     overflow: hidden;
@@ -470,9 +470,9 @@ button {
   }
 
   #printArea .document {
-    width: 1123px;
-    height: 794px;
-    min-height: 794px;
+    width: 297mm;
+    height: 210mm;
+    min-height: 210mm;
     margin: 0;
     padding: 34px 45px 36px;
     box-sizing: border-box;
@@ -1614,7 +1614,7 @@ const bankHtml = allBanks
 
       <div class="recipient">
 
-        <h3>${escapeHtml(company)} 御中</h3>
+        <h3>${company ? escapeHtml(company) + " 御中" : ""}</h3>
 
         <div class="recipient-box">
 
