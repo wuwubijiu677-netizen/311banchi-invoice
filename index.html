@@ -205,9 +205,9 @@ button {
 }
 
 .document {
-  width: 297mm;
-  min-height: 210mm;
-  height: 210mm;
+  width: 768pt;
+  min-height: 576pt;
+  height: 576pt;
   margin: 0 auto;
   background: #fff;
   padding: 34px 45px 36px;
@@ -440,7 +440,7 @@ button {
 }
 
 @page {
-  size: A4 landscape;
+  size: 768pt 576pt;
   margin: 0;
 }
 
@@ -448,8 +448,8 @@ button {
   html, body {
     margin: 0;
     padding: 0;
-    width: 297mm;
-    height: 210mm;
+    width: 768pt;
+    height: 576pt;
     overflow: hidden;
     background: #fff;
   }
@@ -470,9 +470,9 @@ button {
   }
 
   #printArea .document {
-    width: 297mm;
-    height: 210mm;
-    min-height: 210mm;
+    width: 768pt;
+    height: 576pt;
+    min-height: 576pt;
     margin: 0;
     padding: 34px 45px 36px;
     box-sizing: border-box;
@@ -1577,6 +1577,7 @@ function updatePreview() {
   const cargo = document.getElementById("cargo").value;
 
   const notes = document.getElementById("notes").value;
+  const companyName = company.trim();
 
   const totals = getTotals();
 
@@ -1614,7 +1615,7 @@ const bankHtml = allBanks
 
       <div class="recipient">
 
-        <h3>${company ? escapeHtml(company) + " 御中" : ""}</h3>
+        <h3>${companyName ? escapeHtml(companyName) + " 御中" : ""}</h3>
 
         <div class="recipient-box">
 
