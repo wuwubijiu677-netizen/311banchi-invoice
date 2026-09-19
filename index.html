@@ -1,4 +1,4 @@
-```
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -462,20 +462,22 @@ button {
     height: 297mm;
     margin: 0;
     padding: 0;
-    overflow: hidden;
+    overflow: visible;
   }
 
+  /* 元のA4比率（1120×1580px）をA4縦へ一括縮小。
+     二重縮小を避けるため、ここではmm指定を重ねません。 */
   .document {
-    width: 210mm;
-    min-height: 297mm;
-    height: 297mm;
+    width: 1120px;
+    min-height: 1580px;
+    height: 1580px;
     margin: 0;
-    padding: 12mm;
+    padding: 45px;
     box-sizing: border-box;
     box-shadow: none;
-    transform: none;
-    zoom: 1;
-    overflow: hidden;
+    transform: scale(0.70866);
+    transform-origin: top left;
+    overflow: visible;
   }
 }
 </style>
