@@ -447,13 +447,14 @@ button {
     overflow: hidden !important;
   }
 
-  /* プレビュー以外の操作UIを完全非表示 */
-  .container,
-  .panel,
-  .actions,
-  #invoiceLedgerPanel {
-    display: none !important;
-  }
+ /* プレビュー以外の操作UI・見出しを完全非表示 */
+.container,
+.panel,
+.actions,
+#invoiceLedgerPanel,
+.preview-panel-wrap h2 {
+  display: none !important;
+}
 
   .preview-panel-wrap {
     margin: 0 !important;
