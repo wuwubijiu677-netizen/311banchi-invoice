@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -465,8 +464,8 @@ button {
     overflow: visible;
   }
 
-  /* 元のA4比率（1120×1580px）をA4縦へ一括縮小。
-     二重縮小を避けるため、ここではmm指定を重ねません。 */
+  /* 1120×1580pxの帳票をChromeのレイアウト計算ごとA4縦に縮小。
+     transformではなくzoomを使い、余計な2ページ目が発生しないようにする。 */
   .document {
     width: 1120px;
     min-height: 1580px;
@@ -475,8 +474,7 @@ button {
     padding: 45px;
     box-sizing: border-box;
     box-shadow: none;
-    transform: scale(0.70866);
-    transform-origin: top left;
+    zoom: 0.70866;
     overflow: visible;
   }
 }
