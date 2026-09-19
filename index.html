@@ -593,19 +593,17 @@ button {
   </div>
 
 
-  <div class="panel">
+ <div class="panel">
 
-    <h2>振込先</h2>
+  <h2>振込先</h2>
 
-    <div class="field">
-      <label>振込先</label>
-      <select id="bank">
-        <option value="smbc">三井住友銀行</option>
-        <option value="gmo">GMOあおぞらネット銀行</option>
-      </select>
-    </div>
+  <div id="extraBanks"></div>
 
-  </div>
+  <button class="btn-sub" type="button" onclick="addExtraBank()">
+    ＋ 振込先を追加
+  </button>
+
+</div>
 
 
   <div class="actions">
@@ -691,7 +689,7 @@ let docType = "quote";
 let routes = [];
 
 let items = [];
-
+let extraBanks = [];
 let autoInvoiceDeadline = false;
 
 // これまで発行した最後の番号。
@@ -1096,7 +1094,69 @@ function removeRoute(index) {
 
 }
 
+function addExtraBank(value = "") {
 
+  extraBanks.push(value);
+
+  renderExtraBanks();
+
+  updatePreview();
+
+}
+
+
+function renderExtraBanks() {
+
+  const box = document.getElementById("extraBanks");
+
+  if (!box) return;
+
+  box.innerHTML = extraBanks.map((bank, index) => `
+
+    <div class="field" style="margin-top:10px;">
+
+      <label>追加振込先 ${index + 1}</label>
+
+      <textarea
+        rows="3"
+        placeholder="銀行名・支店名・口座番号・口座名義など"
+        oninput="updateExtraBank(${index}, this.value)"
+      >${escapeHtml(bank)}</textarea>
+
+      <button
+        type="button"
+        class="btn-danger"
+        style="margin-top:5px;"
+        onclick="removeExtraBank(${index})"
+      >
+        削除
+      </button>
+
+    </div>
+
+  `).join("");
+
+}
+
+
+function updateExtraBank(index, value) {
+
+  extraBanks[index] = value;
+
+  updatePreview();
+
+}
+
+
+function removeExtraBank(index) {
+
+  extraBanks.splice(index, 1);
+
+  renderExtraBanks();
+
+  updatePreview();
+
+}
 function addItem() {
 
   items.push({
@@ -1456,11 +1516,19 @@ function updatePreview() {
 
   const finalLabel = docType === "quote" ? "見積金額" : "請求金額";
 
-  const bankHtml = bank.map(x =>
+  const allBanks = [
+  ...banks.smbc,
+  ...banks.gmo,
+  ...extraBanks
+    .map(x => x.trim())
+    .filter(x => x !== "")
+];
 
-    `<div class="bank-line">${escapeHtml(x)}</div>`
-
-  ).join("");
+const bankHtml = allBanks
+  .map(x =>
+    `<div class="bank-line">${escapeHtml(x).replace(/\n/g, "<br>")}</div>`
+  )
+  .join("");
 
   const noteText = notes
 
