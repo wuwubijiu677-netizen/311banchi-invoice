@@ -1,3 +1,4 @@
+```
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -342,6 +343,11 @@ button {
   margin-bottom: 9px;
 }
 
+.detail-summary {
+  font-size: 11px;
+  margin-top: 4px;
+}
+
 .number {
   text-align: right;
   white-space: nowrap;
@@ -501,6 +507,29 @@ button {
       <div class="field">
         <label>案件名</label>
         <input id="subject">
+      </div>
+
+    </div>
+
+    <div class="row-3">
+
+      <div class="field">
+        <label>郵便番号</label>
+        <input id="customerZip" placeholder="〒000-0000">
+      </div>
+
+      <div class="field" style="grid-column: span 2;">
+        <label>住所</label>
+        <input id="customerAddress">
+      </div>
+
+    </div>
+
+    <div class="row">
+
+      <div class="field">
+        <label>建物名・階数</label>
+        <input id="customerBuilding">
       </div>
 
     </div>
@@ -1383,22 +1412,22 @@ function buildRouteRows() {
 
     const detail = routeToHtml(route);
 
-const summaryHtml =
-  route === routes[0]
-    ? items
-        .map(item => item.description?.trim())
-        .filter(text => text)
-        .map(text => `
-          <div class="detail-summary">
-            ${escapeHtml(text)}
-          </div>
-        `)
-        .join("")
-    : "";
+    const summaryHtml =
+      route === routes[0]
+        ? items
+            .map(item => item.description?.trim())
+            .filter(text => text)
+            .map(text => `
+              <div class="detail-summary">
+                ${escapeHtml(text)}
+              </div>
+            `)
+            .join("")
+        : "";
 
-const routeDate = route.date
-  ? formatDateShort(route.date)
-  : "";
+    const routeDate = route.date
+      ? formatDateShort(route.date)
+      : "";
 
     return `
 
@@ -1419,8 +1448,9 @@ const routeDate = route.date
         <td class="detail-col">
 
           ${detail}
-　 　　　　${summaryHtml}
-     
+
+          ${summaryHtml}
+
         </td>
 
         <td class="qty-col number">
@@ -1506,6 +1536,12 @@ function updatePreview() {
 
   const person = document.getElementById("customerPerson").value;
 
+  const customerZip = document.getElementById("customerZip").value;
+
+  const customerAddress = document.getElementById("customerAddress").value;
+
+  const customerBuilding = document.getElementById("customerBuilding").value;
+
   const subject = document.getElementById("subject").value;
 
   const docDate = document.getElementById("docDate").value;
@@ -1519,8 +1555,6 @@ function updatePreview() {
   const notes = document.getElementById("notes").value;
 
   const totals = getTotals();
-
-  
 
   const title = docType === "quote" ? "御見積書" : "御請求書";
 
@@ -1585,6 +1619,28 @@ const bankHtml = allBanks
               ${escapeHtml(person)}
 
               ${person ? " 様" : ""}
+
+            </div>
+
+          </div>
+
+        </div>
+
+        <div class="recipient-box">
+
+          <div class="recipient-row">
+
+            <div class="recipient-label">住所</div>
+
+            <div class="recipient-value">
+
+              ${escapeHtml(customerZip)}
+
+              ${customerZip && (customerAddress || customerBuilding) ? "<br>" : ""}
+
+              ${escapeHtml(customerAddress)}
+
+              ${customerBuilding ? "<br>" + escapeHtml(customerBuilding) : ""}
 
             </div>
 
@@ -2028,9 +2084,11 @@ function resetForm() {
 
   routes = [];
   items = [];
+  extraBanks = [];
 
   renderRoutes();
   renderItems();
+  renderExtraBanks();
 
   const today = new Date();
   const yyyy = today.getFullYear();
@@ -2058,8 +2116,6 @@ document.addEventListener("input", () => {
   updatePreview();
 
 });
-
-
 
 
 document.getElementById("docDate").addEventListener("change", () => {
@@ -2095,6 +2151,7 @@ document.getElementById("docDate").value =
 
 setNextDocumentNumber();
 
+renderExtraBanks();
 addRoute("往路");
 addItem();
 
@@ -2106,3 +2163,4 @@ showInvoiceLedger();
 
 </body>
 </html>
+```
