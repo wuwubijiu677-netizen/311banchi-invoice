@@ -482,6 +482,234 @@ button {
     zoom: 1;
   }
 }
+
+
+/* FINAL LAYOUT OVERRIDE: match the reference 768 x 576 pt landscape document */
+.document {
+  width: 768pt !important;
+  height: 576pt !important;
+  min-height: 576pt !important;
+  margin: 0 auto !important;
+  padding: 14pt 30pt 18pt !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.doc-top {
+  grid-template-columns: 310pt 240pt !important;
+  justify-content: space-between !important;
+  gap: 0 !important;
+  margin-bottom: 7pt !important;
+  min-height: 0 !important;
+}
+
+.recipient h3 {
+  margin: 0 0 5pt !important;
+  font-size: 20pt !important;
+  line-height: 1.05 !important;
+}
+
+.recipient-box {
+  width: 310pt !important;
+  margin-bottom: 4pt !important;
+}
+
+.recipient-row {
+  grid-template-columns: 54pt 1fr !important;
+  min-height: 25pt !important;
+}
+
+.recipient-label {
+  padding: 5pt 7pt !important;
+  font-size: 10pt !important;
+}
+
+.recipient-value {
+  padding: 5pt 8pt !important;
+  font-size: 10pt !important;
+  line-height: 1.15 !important;
+}
+
+.company {
+  width: 240pt !important;
+  margin: 0 !important;
+}
+
+.doc-title {
+  font-size: 24pt !important;
+  line-height: 1.05 !important;
+  margin: 0 0 4pt !important;
+}
+
+.company-name {
+  font-size: 15pt !important;
+  margin-bottom: 2pt !important;
+}
+
+.company-line {
+  font-size: 8.5pt !important;
+  line-height: 1.2 !important;
+}
+
+.doc-divider {
+  border-top-width: 1.2pt !important;
+  margin: 0 0 8pt !important;
+}
+
+.subject-meta {
+  grid-template-columns: 1fr 215pt !important;
+  gap: 10pt !important;
+  margin-bottom: 8pt !important;
+}
+
+.subject {
+  font-size: 17pt !important;
+  line-height: 1.15 !important;
+}
+
+.subject-label {
+  font-size: 10pt !important;
+  margin-right: 12pt !important;
+}
+
+.meta {
+  font-size: 9.5pt !important;
+}
+
+.meta-row {
+  grid-template-columns: 70pt 1fr !important;
+  column-gap: 7pt !important;
+  margin-bottom: 2.5pt !important;
+}
+
+.doc-table th,
+.doc-table td {
+  padding: 5pt 6pt !important;
+  border-width: 1pt !important;
+}
+
+.doc-table th {
+  font-size: 9.5pt !important;
+  line-height: 1.1 !important;
+}
+
+.doc-table .date-col { width: 56pt !important; }
+.doc-table .type-col { width: 52pt !important; }
+.doc-table .detail-col { width: auto !important; }
+.doc-table .qty-col { width: 44pt !important; }
+.doc-table .unit-col { width: 66pt !important; }
+.doc-table .amount-col { width: 66pt !important; }
+
+.detail-main {
+  font-size: 10pt !important;
+  margin-bottom: 2pt !important;
+  line-height: 1.2 !important;
+}
+
+.detail-address {
+  font-size: 8.5pt !important;
+  margin-bottom: 4pt !important;
+  line-height: 1.2 !important;
+}
+
+.detail-summary {
+  font-size: 8.5pt !important;
+  margin-top: 2pt !important;
+  line-height: 1.2 !important;
+}
+
+.doc-item {
+  margin: 8pt 0 9pt !important;
+  font-size: 11pt !important;
+  line-height: 1.15 !important;
+}
+
+.bottom-grid {
+  grid-template-columns: 383pt 1fr !important;
+  gap: 14pt !important;
+  margin-top: 6pt !important;
+}
+
+.bottom-box {
+  min-height: 108pt !important;
+  padding: 9pt !important;
+}
+
+.bottom-title {
+  font-size: 10.5pt !important;
+  margin-bottom: 5pt !important;
+}
+
+.bank-line,
+.note-line {
+  font-size: 8.5pt !important;
+  line-height: 1.3 !important;
+}
+
+.total-row {
+  padding: 4pt 0 !important;
+  font-size: 10pt !important;
+}
+
+.total-final {
+  margin-top: 4pt !important;
+  padding-top: 7pt !important;
+  font-size: 17pt !important;
+}
+
+.invoice-note {
+  margin-top: 6pt !important;
+  padding-top: 5pt !important;
+}
+
+.doc-footer {
+  left: 30pt !important;
+  bottom: 14pt !important;
+  font-size: 8pt !important;
+}
+
+@page {
+  size: 768pt 576pt;
+  margin: 0;
+}
+
+@media print {
+  html, body {
+    width: 768pt !important;
+    height: 576pt !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: #fff !important;
+  }
+
+  body * { visibility: hidden !important; }
+  #printArea, #printArea * { visibility: visible !important; }
+
+  #printArea {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 768pt !important;
+    height: 576pt !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: #fff !important;
+  }
+
+  #printArea .document {
+    width: 768pt !important;
+    height: 576pt !important;
+    min-height: 576pt !important;
+    margin: 0 !important;
+    padding: 14pt 30pt 18pt !important;
+    box-shadow: none !important;
+    transform: none !important;
+    zoom: 1 !important;
+    overflow: hidden !important;
+  }
+}
 </style>
 </head>
 
