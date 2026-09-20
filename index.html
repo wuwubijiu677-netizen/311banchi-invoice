@@ -1266,24 +1266,48 @@ ${JSON.stringify(payloadData, null, 2)}
 
 問題がなければ「問題は見当たりませんでした」と伝え、修正すべき点や確認すべき点があれば箇条書きで分かりやすくアドバイスしてください。`;
 
-  try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
-      })
-    });
+ // 利用可能な候補モデル（見つかるまで上から順に試します）
+  const candidateModels = [
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash"
+  ];
 
-    if (!res.ok) {
-      throw new Error(`APIエラー: HTTP ${res.status}`);
+  let replyText = null;
+  let lastErrorMsg = "";
+
+  for (const model of candidateModels) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        lastErrorMsg = `HTTP ${res.status}: ${errJson.error?.message || res.statusText}`;
+        // 404（モデル見つからず）の場合は次のモデルを試す
+        if (res.status === 404) continue;
+        throw new Error(lastErrorMsg);
+      }
+
+      const data = await res.json();
+      replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (replyText) break; // 成功したらループを抜ける
+    } catch (e) {
+      lastErrorMsg = e.message;
+      if (!e.message.includes("404")) break;
     }
+  }
 
-    const data = await res.json();
-    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    aiResult.textContent = reply || "チェック結果を取得できませんでした。";
-  } catch (err) {
-    aiResult.textContent = `チェック中にエラーが発生しました:\n${err.message}\n※APIキーが有効か、通信制限がかかっていないかご確認ください。`;
+  if (replyText) {
+    aiResult.textContent = replyText;
+  } else {
+    aiResult.textContent = `チェックに失敗しました:\n${lastErrorMsg}\n※APIキーが「Google AI Studio」で正しく有効化されているかご確認ください。`;
   }
 }
 
