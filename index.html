@@ -109,6 +109,11 @@ button {
   color: #222;
 }
 
+.btn-success {
+  background: #2e7d32;
+  color: #fff;
+}
+
 .btn-danger {
   background: #d9534f;
   color: #fff;
@@ -181,7 +186,7 @@ button {
 .items-table td {
   border: 1px solid #bbb;
   padding: 8px;
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .items-table th {
@@ -190,6 +195,85 @@ button {
 
 .text-right {
   text-align: right;
+}
+
+/* サマリーカード表示用 */
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.summary-card {
+  padding: 14px 18px;
+  border-radius: 10px;
+  background: #f8f9fa;
+  border: 1px solid #e2e8f0;
+}
+
+.summary-card.danger {
+  background: #fff5f5;
+  border-color: #feb2b2;
+}
+
+.summary-card.warning {
+  background: #fffaf0;
+  border-color: #fbd38d;
+}
+
+.summary-label {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 4px;
+  font-weight: bold;
+}
+
+.summary-value {
+  font-size: 20px;
+  font-weight: bold;
+  color: #111;
+}
+
+.summary-card.danger .summary-value {
+  color: #c53030;
+}
+
+.summary-card.warning .summary-value {
+  color: #c05621;
+}
+
+/* 台帳アラート用ハイライト */
+tr.row-overdue {
+  background-color: #ffebee !important;
+}
+
+tr.row-soon {
+  background-color: #fffde7 !important;
+}
+
+tr.row-paid {
+  background-color: #fcfcfc !important;
+  color: #777;
+}
+
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  margin-left: 4px;
+}
+
+.badge-overdue {
+  background: #ef5350;
+  color: #fff;
+}
+
+.badge-soon {
+  background: #ffa726;
+  color: #fff;
 }
 
 .actions {
@@ -672,10 +756,37 @@ button {
 <!-- 請求管理 -->
 <div class="panel" id="invoiceLedgerPanel" style="margin:20px;">
   <h2>請求管理</h2>
+
+  <!-- サマリー集計カード -->
+  <div class="summary-cards">
+    <div class="summary-card">
+      <div class="summary-label">未入金 合計</div>
+      <div class="summary-value" id="sumUnpaid">0円</div>
+    </div>
+    <div class="summary-card danger">
+      <div class="summary-label">期日超過（至急確認）</div>
+      <div class="summary-value" id="sumOverdue">0円</div>
+    </div>
+    <div class="summary-card warning">
+      <div class="summary-label">まもなく期日 (3日以内)</div>
+      <div class="summary-value" id="sumSoon">0円</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">当月売上 (請求ベース)</div>
+      <div class="summary-value" id="sumThisMonth">0円</div>
+    </div>
+  </div>
+
   <div class="button-row">
     <button class="btn-main" onclick="registerCurrentInvoice()">現在の請求書を登録</button>
     <button class="btn-sub" onclick="showInvoiceLedger()">一覧を更新</button>
+    <button class="btn-success" onclick="exportBackupJSON()">💾 バックアップ保存 (JSON)</button>
+    <button class="btn-sub" onclick="document.getElementById('restoreFileInput').click()">📂 バックアップ読込</button>
+    <button class="btn-sub" onclick="exportCSV()">📊 CSVエクスポート</button>
+    <!-- 隠しファイル入力 -->
+    <input type="file" id="restoreFileInput" style="display:none;" accept=".json" onchange="importBackupJSON(event)">
   </div>
+
   <div class="table-wrap" style="margin-top:15px;">
     <table class="items-table">
       <thead>
@@ -687,8 +798,8 @@ button {
           <th>請求額</th>
           <th>入金期日</th>
           <th>freee</th>
-          <th>入金</th>
-          <th></th>
+          <th>入金ステータス</th>
+          <th>操作</th>
         </tr>
       </thead>
       <tbody id="invoiceLedgerBody"></tbody>
@@ -1267,10 +1378,7 @@ ${JSON.stringify(payloadData, null, 2)}
 問題がなければ「問題は見当たりませんでした」と伝え、修正すべき点や確認すべき点があれば箇条書きで分かりやすくアドバイスしてください。`;
 
   try {
-    // 案内通りの最新モデルを指定
-    let targetModel = "gemini-3.6-flash";
-
-    // 決定したモデルで診断リクエストを送信
+    const targetModel = "gemini-3.6-flash";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
     const res = await fetch(url, {
       method: "POST",
@@ -1294,6 +1402,7 @@ ${JSON.stringify(payloadData, null, 2)}
   }
 }
 
+// 請求管理台帳の取得と保存
 function getInvoiceLedger() {
   try {
     const saved = JSON.parse(localStorage.getItem("311banchi_invoice_ledger") || "[]");
@@ -1353,40 +1462,99 @@ function registerCurrentInvoice() {
   alert("請求管理台帳に登録しました。");
 }
 
+// 台帳一覧の描画＆アラート・集計計算
 function showInvoiceLedger() {
   const body = document.getElementById("invoiceLedgerBody");
   if (!body) return;
   const ledger = getInvoiceLedger();
+
+  // 今日の日付 (時分秒を切り捨てて比較用)
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const currentYearMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+
+  let totalUnpaid = 0;
+  let totalOverdue = 0;
+  let totalSoon = 0;
+  let totalThisMonth = 0;
+
   if (!ledger.length) {
     body.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:20px;">まだ請求書が登録されていません。</td></tr>`;
+    updateSummaryCards(0, 0, 0, 0);
     return;
   }
 
-  body.innerHTML = ledger.map((row, index) => `
-    <tr>
-      <td>${escapeHtml(row.invoiceNumber)}</td>
-      <td>${escapeHtml(formatDateLong(row.invoiceDate))}</td>
-      <td>${escapeHtml(row.customer)}</td>
-      <td>${escapeHtml(row.subject)}</td>
-      <td class="text-right">${yen(row.amount)}</td>
-      <td>${escapeHtml(formatDateLong(row.deadline))}</td>
-      <td>
-        <select onchange="updateInvoiceLedgerStatus(${index}, 'freeeStatus', this.value)">
-          <option value="未登録" ${row.freeeStatus === "未登録" ? "selected" : ""}>未登録</option>
-          <option value="登録済" ${row.freeeStatus === "登録済" ? "selected" : ""}>登録済</option>
-        </select>
-      </td>
-      <td>
-        <select onchange="updateInvoiceLedgerStatus(${index}, 'paymentStatus', this.value)">
-          <option value="未入金" ${row.paymentStatus === "未入金" ? "selected" : ""}>未入金</option>
-          <option value="入金済" ${row.paymentStatus === "入金済" ? "selected" : ""}>入金済</option>
-        </select>
-      </td>
-      <td>
-        <button class="btn-danger" onclick="deleteInvoiceLedger(${index})">削除</button>
-      </td>
-    </tr>
-  `).join("");
+  body.innerHTML = ledger.map((row, index) => {
+    const isPaid = row.paymentStatus === "入金済";
+    const deadlineDate = row.deadline ? new Date(row.deadline + "T00:00:00") : null;
+
+    let rowClass = "";
+    let badgeHtml = "";
+
+    // 当月売上集計 (請求日基準)
+    if (row.invoiceDate && row.invoiceDate.startsWith(currentYearMonth)) {
+      totalThisMonth += Number(row.amount || 0);
+    }
+
+    if (isPaid) {
+      rowClass = "row-paid";
+    } else {
+      totalUnpaid += Number(row.amount || 0);
+
+      if (deadlineDate && !isNaN(deadlineDate.getTime())) {
+        const diffDays = Math.ceil((deadlineDate - today) / (1000 * 60 * 60 * 24));
+        if (diffDays < 0) {
+          // 期日超過
+          rowClass = "row-overdue";
+          badgeHtml = `<span class="badge badge-overdue">⚠️ 超過 ${Math.abs(diffDays)}日</span>`;
+          totalOverdue += Number(row.amount || 0);
+        } else if (diffDays <= 3) {
+          // 期日間近 (3日以内)
+          rowClass = "row-soon";
+          badgeHtml = `<span class="badge badge-soon">⏳ 残り${diffDays}日</span>`;
+          totalSoon += Number(row.amount || 0);
+        }
+      }
+    }
+
+    return `
+      <tr class="${rowClass}">
+        <td><strong>${escapeHtml(row.invoiceNumber)}</strong></td>
+        <td>${escapeHtml(formatDateLong(row.invoiceDate))}</td>
+        <td>${escapeHtml(row.customer)}</td>
+        <td>${escapeHtml(row.subject)}</td>
+        <td class="text-right"><strong>${yen(row.amount)}</strong></td>
+        <td>
+          ${escapeHtml(formatDateLong(row.deadline))}
+          ${badgeHtml}
+        </td>
+        <td>
+          <select onchange="updateInvoiceLedgerStatus(${index}, 'freeeStatus', this.value)">
+            <option value="未登録" ${row.freeeStatus === "未登録" ? "selected" : ""}>未登録</option>
+            <option value="登録済" ${row.freeeStatus === "登録済" ? "selected" : ""}>登録済</option>
+          </select>
+        </td>
+        <td>
+          <select onchange="updateInvoiceLedgerStatus(${index}, 'paymentStatus', this.value)" style="font-weight:bold; ${isPaid ? 'color:#2e7d32;' : 'color:#c53030;'}">
+            <option value="未入金" ${!isPaid ? "selected" : ""}>未入金</option>
+            <option value="入金済" ${isPaid ? "selected" : ""}>入金済</option>
+          </select>
+        </td>
+        <td>
+          <button class="btn-danger" onclick="deleteInvoiceLedger(${index})">削除</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  updateSummaryCards(totalUnpaid, totalOverdue, totalSoon, totalThisMonth);
+}
+
+function updateSummaryCards(unpaid, overdue, soon, thisMonth) {
+  document.getElementById("sumUnpaid").textContent = yen(unpaid);
+  document.getElementById("sumOverdue").textContent = yen(overdue);
+  document.getElementById("sumSoon").textContent = yen(soon);
+  document.getElementById("sumThisMonth").textContent = yen(thisMonth);
 }
 
 function updateInvoiceLedgerStatus(index, key, value) {
@@ -1405,6 +1573,99 @@ function deleteInvoiceLedger(index) {
   ledger.splice(index, 1);
   saveInvoiceLedger(ledger);
   showInvoiceLedger();
+}
+
+// ==========================================
+// バックアップ・データ復元・CSVエクスポート
+// ==========================================
+
+// 1. JSONバックアップ保存
+function exportBackupJSON() {
+  const ledger = getInvoiceLedger();
+  const quoteNum = localStorage.getItem("311banchi_quote_number") || initialLastNumbers.quote;
+  const invoiceNum = localStorage.getItem("311banchi_invoice_number") || initialLastNumbers.invoice;
+
+  const backupData = {
+    version: "1.0",
+    exportDate: new Date().toISOString(),
+    quoteNumber: quoteNum,
+    invoiceNumber: invoiceNum,
+    ledger: ledger
+  };
+
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
+  const downloadAnchor = document.createElement("a");
+  const yyyymmdd = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  downloadAnchor.setAttribute("href", dataStr);
+  downloadAnchor.setAttribute("download", `311BANCHI_会計バックアップ_${yyyymmdd}.json`);
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
+}
+
+// 2. JSONバックアップ読込（復元）
+function importBackupJSON(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.ledger || !Array.isArray(data.ledger)) {
+        throw new Error("バックアップファイルの形式が正しくありません。");
+      }
+
+      if (!confirm(`バックアップファイルを読み込みますか？\n（台帳データ ${data.ledger.length} 件が復元されます）`)) {
+        event.target.value = "";
+        return;
+      }
+
+      saveInvoiceLedger(data.ledger);
+      if (data.quoteNumber) localStorage.setItem("311banchi_quote_number", String(data.quoteNumber));
+      if (data.invoiceNumber) localStorage.setItem("311banchi_invoice_number", String(data.invoiceNumber));
+
+      showInvoiceLedger();
+      setNextDocumentNumber();
+      alert("バックアップから正常に復元しました！");
+    } catch (err) {
+      alert("読み込みエラー: " + err.message);
+    }
+    event.target.value = "";
+  };
+  reader.readAsText(file);
+}
+
+// 3. Excel向けCSVエクスポート
+function exportCSV() {
+  const ledger = getInvoiceLedger();
+  if (!ledger.length) {
+    alert("エクスポートする台帳データがありません。");
+    return;
+  }
+
+  const headers = ["請求書番号", "請求日", "取引先", "案件名", "請求額", "入金期日", "freeeステータス", "入金ステータス"];
+  const rows = ledger.map(r => [
+    `"${r.invoiceNumber}"`,
+    `"${r.invoiceDate}"`,
+    `"${(r.customer || "").replace(/"/g, '""')}"`,
+    `"${(r.subject || "").replace(/"/g, '""')}"`,
+    r.amount,
+    `"${r.deadline}"`,
+    `"${r.freeeStatus}"`,
+    `"${r.paymentStatus}"`
+  ]);
+
+  const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(e => e.join(","))].join("\r\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const yyyymmdd = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `311BANCHI_請求管理台帳_${yyyymmdd}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
 function printAndAdvance() {
