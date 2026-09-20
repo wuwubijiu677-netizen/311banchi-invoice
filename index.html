@@ -1267,29 +1267,10 @@ ${JSON.stringify(payloadData, null, 2)}
 問題がなければ「問題は見当たりませんでした」と伝え、修正すべき点や確認すべき点があれば箇条書きで分かりやすくアドバイスしてください。`;
 
   try {
-    // 1. 利用可能なモデル一覧を自動取得
-    let targetModel = "gemini-2.5-flash";
-    try {
-      const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-      if (listRes.ok) {
-        const listData = await listRes.json();
-        const available = (listData.models || [])
-          .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"))
-          .map(m => m.name.replace(/^models\//, ""));
+    // 案内通りの最新モデルを指定
+    let targetModel = "gemini-3.6-flash";
 
-        const flashModel = available.find(m => m.includes("flash") && !m.includes("1.5")) 
-                        || available.find(m => m.includes("flash")) 
-                        || available[0];
-
-        if (flashModel) {
-          targetModel = flashModel;
-        }
-      }
-    } catch (e) {
-      // 取得失敗時はデフォルト候補をそのまま使用
-    }
-
-    // 2. 決定した有効モデルで診断リクエストを送信
+    // 決定したモデルで診断リクエストを送信
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
     const res = await fetch(url, {
       method: "POST",
