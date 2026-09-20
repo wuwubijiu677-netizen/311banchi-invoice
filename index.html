@@ -1266,25 +1266,53 @@ ${JSON.stringify(payloadData, null, 2)}
 
 問題がなければ「問題は見当たりませんでした」と伝え、修正すべき点や確認すべき点があれば箇条書きで分かりやすくアドバイスしてください。`;
 
- // 利用可能な候補モデル（見つかるまで上から順に試します）
-  const candidateModels = [
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash"
-  ];
-
-  let replyText = null;
-  let lastErrorMsg = "";
-
-  for (const model of candidateModels) {
+  try {
+    // 1. 利用可能なモデル一覧を自動取得
+    let targetModel = "gemini-2.5-flash"; // デフォルト候補
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
-        })
+      const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        const available = (listData.models || [])
+          .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"))
+          .map(m => m.name.replace(/^models\//, ""));
+
+        // flash系モデルを優先して選択
+        const flashModel = available.find(m => m.includes("flash") && !m.includes("1.5")) 
+                        || available.find(m => m.includes("flash")) 
+                        || available[0];
+
+        if (flashModel) {
+          targetModel = flashModel;
+        }
+      }
+    } catch (e) {
+      // 取得失敗時はデフォルト候補をそのまま使用
+    }
+
+    // 2. 決定した有効モデルで診断リクエストを送信
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }]
+      })
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(`HTTP ${res.status}: ${errJson.error?.message || res.statusText}`);
+    }
+
+    const data = await res.json();
+    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    aiResult.textContent = reply || "チェック結果を取得できませんでした。";
+
+  } catch (err) {
+    aiResult.textContent = `チェック中にエラーが発生しました:\n${err.message}\n※APIキーまたはネットワーク接続をご確認ください。`;
+  }
+}
       });
 
       if (!res.ok) {
