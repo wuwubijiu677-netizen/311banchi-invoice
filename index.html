@@ -1268,7 +1268,7 @@ ${JSON.stringify(payloadData, null, 2)}
 
   try {
     // 1. 利用可能なモデル一覧を自動取得
-    let targetModel = "gemini-2.5-flash"; // デフォルト候補
+    let targetModel = "gemini-2.5-flash";
     try {
       const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
       if (listRes.ok) {
@@ -1277,7 +1277,6 @@ ${JSON.stringify(payloadData, null, 2)}
           .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"))
           .map(m => m.name.replace(/^models\//, ""));
 
-        // flash系モデルを優先して選択
         const flashModel = available.find(m => m.includes("flash") && !m.includes("1.5")) 
                         || available.find(m => m.includes("flash")) 
                         || available[0];
@@ -1311,31 +1310,6 @@ ${JSON.stringify(payloadData, null, 2)}
 
   } catch (err) {
     aiResult.textContent = `チェック中にエラーが発生しました:\n${err.message}\n※APIキーまたはネットワーク接続をご確認ください。`;
-  }
-}
-      });
-
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        lastErrorMsg = `HTTP ${res.status}: ${errJson.error?.message || res.statusText}`;
-        // 404（モデル見つからず）の場合は次のモデルを試す
-        if (res.status === 404) continue;
-        throw new Error(lastErrorMsg);
-      }
-
-      const data = await res.json();
-      replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (replyText) break; // 成功したらループを抜ける
-    } catch (e) {
-      lastErrorMsg = e.message;
-      if (!e.message.includes("404")) break;
-    }
-  }
-
-  if (replyText) {
-    aiResult.textContent = replyText;
-  } else {
-    aiResult.textContent = `チェックに失敗しました:\n${lastErrorMsg}\n※APIキーが「Google AI Studio」で正しく有効化されているかご確認ください。`;
   }
 }
 
@@ -1455,7 +1429,6 @@ function deleteInvoiceLedger(index) {
 function printAndAdvance() {
   updatePreview();
 
-  // PDF保存時のファイル名に案件名・会社名・番号を自動セット
   const subject = document.getElementById("subject").value.trim() || "案件名なし";
   const customer = document.getElementById("customerCompany").value.trim() || "取引先";
   const docNumber = document.getElementById("docNumber").value.trim();
