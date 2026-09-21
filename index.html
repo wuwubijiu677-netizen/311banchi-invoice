@@ -646,6 +646,16 @@ tr.row-won {
 
   <div class="panel">
     <h2>宛先</h2>
+    <div style="background:#f0f4f8; border:1px solid #d0dbe5; border-radius:8px; padding:12px; margin-bottom:15px;">
+      <label style="font-weight:bold; font-size:14px; display:block; margin-bottom:6px;">🏢 取引先マスタから呼出</label>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <select id="clientMasterSelect" onchange="applyClientMaster(this.value)" style="flex:1;">
+          <option value="">-- 保存済みの取引先を選択 --</option>
+        </select>
+        <button type="button" class="btn-sub" style="font-weight:bold; white-space:nowrap;" onclick="saveCurrentAsClient()">💾 現在の宛先をマスタに登録</button>
+        <button type="button" class="btn-danger" style="white-space:nowrap; padding:9px 12px;" onclick="deleteSelectedClient()">削除</button>
+      </div>
+    </div>
     <div class="row">
       <div class="field">
         <label>会社名</label>
@@ -860,7 +870,115 @@ const initialLastNumbers = {
   quote: 333,
   invoice: 408
 };
+// ==========================================
+// 取引先マスタ管理
+// ==========================================
+function getClientMaster() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("311banchi_client_master") || "[]");
+    return Array.isArray(saved) ? saved : [];
+  } catch (e) {
+    return [];
+  }
+}
 
+function saveClientMasterList(list) {
+  localStorage.setItem("311banchi_client_master", JSON.stringify(list));
+}
+
+// ドロップダウンの選択肢を更新
+function renderClientMasterSelect() {
+  const select = document.getElementById("clientMasterSelect");
+  if (!select) return;
+  const list = getClientMaster();
+  
+  select.innerHTML = '<option value="">-- 保存済みの取引先を選択 --</option>';
+  list.forEach((client, idx) => {
+    const opt = document.createElement("option");
+    opt.value = idx;
+    opt.textContent = client.company + (client.person ? ` (${client.person}様)` : "");
+    select.appendChild(opt);
+  });
+}
+
+// 選択した取引先をフォームへ自動入力
+function applyClientMaster(idxStr) {
+  if (idxStr === "") return;
+  const list = getClientMaster();
+  const c = list[Number(idxStr)];
+  if (!c) return;
+
+  document.getElementById("customerCompany").value = c.company || "";
+  document.getElementById("customerDept").value = c.dept || "";
+  document.getElementById("customerPerson").value = c.person || "";
+  document.getElementById("customerZip").value = c.zip || "";
+  document.getElementById("customerAddress").value = c.address || "";
+  document.getElementById("customerBuilding").value = c.building || "";
+  
+  updatePreview();
+}
+
+// 現在の宛先フォームの内容をマスタに登録・更新
+function saveCurrentAsClient() {
+  const company = document.getElementById("customerCompany").value.trim();
+  if (!company) {
+    alert("会社名を入力してください。");
+    return;
+  }
+
+  const clientData = {
+    company: company,
+    dept: document.getElementById("customerDept").value.trim(),
+    person: document.getElementById("customerPerson").value.trim(),
+    zip: document.getElementById("customerZip").value.trim(),
+    address: document.getElementById("customerAddress").value.trim(),
+    building: document.getElementById("customerBuilding").value.trim()
+  };
+
+  const list = getClientMaster();
+  const existingIdx = list.findIndex(c => c.company === company);
+
+  if (existingIdx >= 0) {
+    if (confirm(`「${company}」は既に登録されています。最新の入力内容で上書き更新しますか？`)) {
+      list[existingIdx] = clientData;
+      saveClientMasterList(list);
+      renderClientMasterSelect();
+      document.getElementById("clientMasterSelect").value = existingIdx;
+      alert("取引先マスタを更新しました！");
+    }
+  } else {
+    list.push(clientData);
+    list.sort((a, b) => a.company.localeCompare(b.company, "ja"));
+    saveClientMasterList(list);
+    renderClientMasterSelect();
+    const newIdx = list.findIndex(c => c.company === company);
+    if (newIdx >= 0) document.getElementById("clientMasterSelect").value = newIdx;
+    alert(`「${company}」を取引先マスタに登録しました！次回から選択するだけで自動入力されます。`);
+  }
+}
+
+// 選択中の取引先を削除
+function deleteSelectedClient() {
+  const select = document.getElementById("clientMasterSelect");
+  const idx = select.value;
+  if (idx === "") {
+    alert("削除したい取引先をドロップダウンから選択してください。");
+    return;
+  }
+
+  const list = getClientMaster();
+  const target = list[Number(idx)];
+  if (!target) return;
+
+  if (!confirm(`取引先マスタから「${target.company}」を削除しますか？`)) return;
+
+  list.splice(Number(idx), 1);
+  saveClientMasterList(list);
+  renderClientMasterSelect();
+  select.value = "";
+  alert("取引先マスタから削除しました。");
+}
+  
 // APIキー管理
 function saveApiKey() {
   const key = document.getElementById("geminiApiKey").value.trim();
@@ -2125,6 +2243,7 @@ addRoute("往路");
 updatePreview();
 showQuoteLedger();
 showInvoiceLedger();
+renderClientMasterSelect(); 
 </script>
 
 </body>
