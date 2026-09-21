@@ -795,7 +795,33 @@ tr.row-won {
     </table>
   </div>
 </div>
-
+<!-- 見積管理台帳 -->
+<div class="panel" id="quoteLedgerPanel" style="margin:20px;">
+  <h2>📋 見積管理台帳</h2>
+  <div class="button-row">
+    <button class="btn-main" onclick="registerCurrentQuote()">現在の見積書を登録</button>
+    <button class="btn-sub" onclick="showQuoteLedger()">一覧を更新</button>
+  </div>
+  <div class="table-wrap" style="margin-top:15px;">
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th>見積書番号</th>
+          <th>見積日</th>
+          <th>取引先</th>
+          <th>案件名</th>
+          <th>見積額</th>
+          <th>有効期限</th>
+          <th>状況ステータス</th>
+          <th>請求書作成</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="quoteLedgerBody"></tbody>
+    </table>
+  </div>
+</div>
+  
 <!-- 請求管理 -->
 <div class="panel" id="invoiceLedgerPanel" style="margin:20px;">
   <h2>💰 請求管理台帳</h2>
@@ -1763,7 +1789,106 @@ function registerCurrentInvoice() {
     record.paymentStatus = ledger[existingIndex].paymentStatus || "未入金";
     ledger[existingIndex] = record;
     saveInvoiceLedger(ledger);
+    function getQuoteLedger() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("311banchi_quote_ledger") || "[]");
+    return Array.isArray(saved) ? saved : [];
+  } catch (e) { return []; }
+}
+function saveQuoteLedger(ledger) {
+  localStorage.setItem("311banchi_quote_ledger", JSON.stringify(ledger));
+}
+function registerCurrentQuote() {
+  if (docType !== "quote") { alert("見積書に切り替えてから登録してください。"); return; }
+  const quoteNumber = document.getElementById("docNumber").value.trim();
+  const quoteDate = document.getElementById("docDate").value;
+  const customer = document.getElementById("customerCompany").value.trim();
+  const subject = document.getElementById("subject").value.trim();
+  if (!quoteNumber || !quoteDate || !customer || !subject) {
+    alert("見積日・見積書番号・取引先・案件名を入力してください。"); return;
+  }
+  const ledger = getQuoteLedger();
+  const record = {
+    quoteNumber, quoteDate, customer, subject,
+    dept: document.getElementById("customerDept").value.trim(),
+    person: document.getElementById("customerPerson").value.trim(),
+    zip: document.getElementById("customerZip").value.trim(),
+    address: document.getElementById("customerAddress").value.trim(),
+    building: document.getElementById("customerBuilding").value.trim(),
+    deadline: document.getElementById("deadline").value,
+    cargo: document.getElementById("cargo").value,
+    notes: document.getElementById("notes").value,
+    routes: JSON.parse(JSON.stringify(routes)),
+    items: JSON.parse(JSON.stringify(items)),
+    amount: getTotals().total,
+    status: "検討中"
+  };
+  const idx = ledger.findIndex(x => x.quoteNumber === quoteNumber);
+  if (idx >= 0) { ledger[idx] = record; } else { ledger.unshift(record); }
+  saveQuoteLedger(ledger);
+  showQuoteLedger();
+  alert("見積管理台帳に登録しました。");
+}
+function showQuoteLedger() {
+  const body = document.getElementById("quoteLedgerBody");
+  if (!body) return;
+  const ledger = getQuoteLedger();
+  if (!ledger.length) {
+    body.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;">まだ見積書が登録されていません。</td></tr>';
+    return;
+  }
+  body.innerHTML = ledger.map((r, i) => `
+    <tr>
+      <td><strong>${escapeHtml(r.quoteNumber)}</strong></td>
+      <td>${escapeHtml(formatDateLong(r.quoteDate))}</td>
+      <td>${escapeHtml(r.customer)}</td>
+      <td>${escapeHtml(r.subject)}</td>
+      <td class="text-right"><strong>${yen(r.amount)}</strong></td>
+      <td>${escapeHtml(formatDateLong(r.deadline) || "-")}</td>
+      <td>
+        <select onchange="updateQuoteLedgerStatus(${i}, this.value)">
+          <option value="検討中" ${r.status === "検討中" ? "selected" : ""}>検討中</option>
+          <option value="受注" ${r.status === "受注" ? "selected" : ""}>受注</option>
+          <option value="失注" ${r.status === "失注" ? "selected" : ""}>失注</option>
+        </select>
+      </td>
+      <td><button style="background:#f59e0b;color:#fff;font-weight:bold;padding:6px 10px;" onclick="convertQuoteToInvoice(${i})">⚡ 請求書へ変換</button></td>
+      <td><button class="btn-danger" onclick="deleteQuoteLedger(${i})">削除</button></td>
+    </tr>
+  `).join("");
+}
+function updateQuoteLedgerStatus(i, val) {
+  const l = getQuoteLedger(); if (!l[i]) return;
+  l[i].status = val; saveQuoteLedger(l); showQuoteLedger();
+}
+function deleteQuoteLedger(i) {
+  const l = getQuoteLedger(); if (!l[i]) return;
+  if (!confirm("削除しますか？")) return;
+  l.splice(i, 1); saveQuoteLedger(l); showQuoteLedger();
+}
+function convertQuoteToInvoice(i) {
+  const q = getQuoteLedger()[i]; if (!q) return;
+  if (!confirm(`見積「${q.subject}」のデータをもとに請求書を作成しますか？`)) return;
+  document.getElementById("customerCompany").value = q.customer || "";
+  document.getElementById("customerDept").value = q.dept || "";
+  document.getElementById("customerPerson").value = q.person || "";
+  document.getElementById("subject").value = q.subject || "";
+  document.getElementById("customerZip").value = q.zip || "";
+  document.getElementById("customerAddress").value = q.address || "";
+  document.getElementById("customerBuilding").value = q.building || "";
+  document.getElementById("cargo").value = q.cargo || "イベント備品";
+  document.getElementById("notes").value = q.notes || "";
+  routes = q.routes ? JSON.parse(JSON.stringify(q.routes)) : [];
+  items = q.items ? JSON.parse(JSON.stringify(q.items)) : [];
+  renderRoutes();
+  renderItems();
+  setDocType("invoice");
+  updateQuoteLedgerStatus(i, "受注");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  alert("見積データを引き継いで請求書を作成しました！");
+}
     showInvoiceLedger();
+    showQuoteLedger();
     alert("請求管理台帳を更新しました。");
     return;
   }
