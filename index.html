@@ -806,6 +806,30 @@ tr.row-won {
   </div>
 </div>
   
+<!-- 取引先管理台帳 -->
+<div class="panel" id="clientMasterPanel" style="margin:20px;">
+  <h2>🏢 取引先管理台帳</h2>
+  <div class="button-row">
+    <button class="btn-main" onclick="saveCurrentAsClient()">現在の宛先を新規登録・更新</button>
+    <button class="btn-sub" onclick="showClientMasterTable()">一覧を更新</button>
+  </div>
+  <div class="table-wrap" style="margin-top:15px;">
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th style="width:220px;">会社名</th>
+          <th style="width:140px;">部署名</th>
+          <th style="width:120px;">ご担当者</th>
+          <th>住所・所在地</th>
+          <th style="width:100px;">入力反映</th>
+          <th style="width:80px;">操作</th>
+        </tr>
+      </thead>
+      <tbody id="clientMasterTableBody"></tbody>
+    </table>
+  </div>
+</div>
+  
 <!-- 請求管理 -->
 <div class="panel" id="invoiceLedgerPanel" style="margin:20px;">
   <h2>💰 請求管理台帳</h2>
@@ -976,6 +1000,166 @@ function deleteSelectedClient() {
   saveClientMasterList(list);
   renderClientMasterSelect();
   select.value = "";
+  alert("取引先マスタから削除しました。");
+}
+
+  // ==========================================
+// 取引先マスタ ＆ 取引先管理台帳
+// ==========================================
+function getClientMaster() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("311banchi_client_master") || "[]");
+    return Array.isArray(saved) ? saved : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveClientMasterList(list) {
+  localStorage.setItem("311banchi_client_master", JSON.stringify(list));
+}
+
+// ドロップダウンの選択肢を更新
+function renderClientMasterSelect() {
+  const select = document.getElementById("clientMasterSelect");
+  if (!select) return;
+  const list = getClientMaster();
+  
+  select.innerHTML = '<option value="">-- 保存済みの取引先を選択 --</option>';
+  list.forEach((client, idx) => {
+    const opt = document.createElement("option");
+    opt.value = idx;
+    opt.textContent = client.company + (client.person ? ` (${client.person}様)` : "");
+    select.appendChild(opt);
+  });
+}
+
+// 選択した取引先をフォームへ自動入力
+function applyClientMaster(idxStr) {
+  if (idxStr === "" || idxStr === undefined) return;
+  const list = getClientMaster();
+  const c = list[Number(idxStr)];
+  if (!c) return;
+
+  document.getElementById("customerCompany").value = c.company || "";
+  document.getElementById("customerDept").value = c.dept || "";
+  document.getElementById("customerPerson").value = c.person || "";
+  document.getElementById("customerZip").value = c.zip || "";
+  document.getElementById("customerAddress").value = c.address || "";
+  document.getElementById("customerBuilding").value = c.building || "";
+  
+  const select = document.getElementById("clientMasterSelect");
+  if (select) select.value = idxStr;
+  
+  updatePreview();
+}
+
+// 現在の宛先フォームの内容をマスタに登録・更新
+function saveCurrentAsClient() {
+  const company = document.getElementById("customerCompany").value.trim();
+  if (!company) {
+    alert("会社名を入力してください。");
+    return;
+  }
+
+  const clientData = {
+    company: company,
+    dept: document.getElementById("customerDept").value.trim(),
+    person: document.getElementById("customerPerson").value.trim(),
+    zip: document.getElementById("customerZip").value.trim(),
+    address: document.getElementById("customerAddress").value.trim(),
+    building: document.getElementById("customerBuilding").value.trim()
+  };
+
+  const list = getClientMaster();
+  const existingIdx = list.findIndex(c => c.company === company);
+
+  if (existingIdx >= 0) {
+    if (confirm(`「${company}」は既に登録されています。最新の入力内容で上書き更新しますか？`)) {
+      list[existingIdx] = clientData;
+      saveClientMasterList(list);
+      renderClientMasterSelect();
+      showClientMasterTable();
+      document.getElementById("clientMasterSelect").value = existingIdx;
+      alert("取引先マスタを更新しました！");
+    }
+  } else {
+    list.push(clientData);
+    list.sort((a, b) => a.company.localeCompare(b.company, "ja"));
+    saveClientMasterList(list);
+    renderClientMasterSelect();
+    showClientMasterTable();
+    const newIdx = list.findIndex(c => c.company === company);
+    if (newIdx >= 0) document.getElementById("clientMasterSelect").value = newIdx;
+    alert(`「${company}」を取引先マスタに登録しました！`);
+  }
+}
+
+// ドロップダウン選択中の取引先を削除
+function deleteSelectedClient() {
+  const select = document.getElementById("clientMasterSelect");
+  const idx = select.value;
+  if (idx === "") {
+    alert("削除したい取引先をドロップダウンから選択してください。");
+    return;
+  }
+
+  const list = getClientMaster();
+  const target = list[Number(idx)];
+  if (!target) return;
+
+  if (!confirm(`取引先マスタから「${target.company}」を削除しますか？`)) return;
+
+  list.splice(Number(idx), 1);
+  saveClientMasterList(list);
+  renderClientMasterSelect();
+  showClientMasterTable();
+  select.value = "";
+  alert("取引先マスタから削除しました。");
+}
+
+// 取引先管理台帳（一覧表）の描画処理
+function showClientMasterTable() {
+  const tbody = document.getElementById("clientMasterTableBody");
+  if (!tbody) return;
+  const list = getClientMaster();
+
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;">登録済みの取引先はありません。「現在の宛先を新規登録・更新」から登録できます。</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = list.map((c, i) => {
+    const addressFull = [c.zip, c.address, c.building].filter(Boolean).join(" ");
+    return `
+      <tr>
+        <td><strong>${escapeHtml(c.company)}</strong></td>
+        <td>${escapeHtml(c.dept || "-")}</td>
+        <td>${escapeHtml(c.person ? c.person + " 様" : "-")}</td>
+        <td style="font-size:13px;">${escapeHtml(addressFull || "-")}</td>
+        <td style="text-align:center;">
+          <button class="btn-sub" style="font-weight:bold; padding:6px 10px;" onclick="applyClientMaster(${i}); window.scrollTo({top:0, behavior:'smooth'});">⬆ 反映</button>
+        </td>
+        <td style="text-align:center;">
+          <button class="btn-danger" style="padding:6px 10px;" onclick="deleteClientByIndex(${i})">削除</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+// 台帳の一覧から直接削除する処理
+function deleteClientByIndex(index) {
+  const list = getClientMaster();
+  const target = list[index];
+  if (!target) return;
+
+  if (!confirm(`取引先「${target.company}」をマスタから削除しますか？`)) return;
+
+  list.splice(index, 1);
+  saveClientMasterList(list);
+  renderClientMasterSelect();
+  showClientMasterTable();
   alert("取引先マスタから削除しました。");
 }
   
@@ -2244,6 +2428,8 @@ updatePreview();
 showQuoteLedger();
 showInvoiceLedger();
 renderClientMasterSelect(); 
+renderClientMasterSelect();
+showClientMasterTable();  
 </script>
 
 </body>
