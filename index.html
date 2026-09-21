@@ -451,7 +451,7 @@ tr.row-paid {
 .doc-table th,
 .doc-table td {
   border: 1px solid #111;
-  padding: 6px 7px;
+  padding: 5px 7px;
 }
 
 .doc-table th {
@@ -483,6 +483,7 @@ tr.row-paid {
   font-size: 9.5px;
   margin-top: 2px;
   line-height: 1.2;
+  color: #333;
 }
 
 .number {
@@ -690,7 +691,7 @@ tr.row-paid {
   <div class="panel">
     <h2>運搬内容</h2>
     <p style="font-size:12px; color:#666; margin-top:-10px; margin-bottom:14px;">
-      ※宵積みや翌日配達など、搬出と搬入で日付が異なる場合は、下の各地点ごとの「作業日」をそれぞれ変更してください。
+      ※搬出と搬入で日付が異なる場合は、下の各地点ごとの「作業日」をそれぞれ設定してください。
     </p>
     <div id="routes"></div>
     <div class="button-row">
@@ -715,7 +716,7 @@ tr.row-paid {
       <table class="items-table">
         <thead>
           <tr>
-            <th>摘要</th>
+            <th>摘要（※上から順に往路・復路の金額に対応します）</th>
             <th style="width:100px;">数量</th>
             <th style="width:150px;">単価</th>
             <th style="width:150px;">金額</th>
@@ -956,7 +957,15 @@ function addRoute(type) {
     ]
   };
   routes.push(route);
+
+  // ルート数に合わせて明細行が足りなければ追加
+  if (items.length < routes.length) {
+    items.push({ description: `${type} 運搬業務`, qty: 1, unit: 0 });
+    renderItems();
+  }
+
   renderRoutes();
+  updatePreview();
 }
 
 function renderRoutes() {
@@ -989,7 +998,6 @@ function renderRoutes() {
 function updateRouteDate(routeIndex, value) {
   if (!routes[routeIndex]) return;
   routes[routeIndex].date = value;
-  // 各地点の日付が空、または変更前と同値なら一括更新
   routes[routeIndex].stops.forEach(stop => {
     if (!stop.date || stop.date === routes[routeIndex].date) {
       stop.date = value;
@@ -1107,9 +1115,10 @@ function removeExtraBank(index) {
   updatePreview();
 }
 
-function addItem() {
-  items.push({ description: "", qty: 1, unit: 0 });
+function addItem(desc = "", qty = 1, unit = 0) {
+  items.push({ description: desc, qty: qty, unit: unit });
   renderItems();
+  updatePreview();
 }
 
 function renderItems() {
@@ -1118,8 +1127,14 @@ function renderItems() {
   items.forEach((item, index) => {
     const amount = Number(item.qty || 0) * Number(item.unit || 0);
     const tr = document.createElement("tr");
+
+    let placeholderText = "摘要";
+    if (routes[index]) {
+      placeholderText = `${routes[index].type}の運賃・明細名`;
+    }
+
     tr.innerHTML = `
-      <td><input value="${escapeHtml(item.description)}" onchange="updateItem(${index},'description',this.value)"></td>
+      <td><input value="${escapeHtml(item.description)}" placeholder="${placeholderText}" onchange="updateItem(${index},'description',this.value)"></td>
       <td><input type="number" min="0" value="${item.qty}" onchange="updateItem(${index},'qty',this.value)"></td>
       <td><input type="number" min="0" value="${item.unit}" onchange="updateItem(${index},'unit',this.value)"></td>
       <td class="text-right">${yen(amount)}</td>
@@ -1159,7 +1174,6 @@ function getTotals() {
   return { subtotal, tax, total: subtotal + tax };
 }
 
-// 複数日の範囲フォーマット (例: "10/28(水)" または "10/28(水)〜10/29(木)")
 function formatRouteDateSpan(route) {
   const dates = route.stops
     .map(s => s.date || route.date)
@@ -1180,7 +1194,6 @@ function formatRouteDateSpan(route) {
 function routeToHtml(route) {
   if (!route.stops.length) return "";
 
-  // 全地点の日付が同一か判定
   const dates = route.stops.map(s => s.date || route.date).filter(d => d);
   const hasMultipleDates = new Set(dates).size > 1;
 
@@ -1201,30 +1214,57 @@ function routeToHtml(route) {
   }).join("");
 }
 
+// 往路・復路それぞれに明細行を個別対応させるテーブル描画
 function buildRouteRows() {
-  if (!routes.length) {
-    return `<tr><td colspan="6" style="text-align:center;padding:20px;">往路・復路を追加してください</td></tr>`;
+  if (!routes.length && !items.length) {
+    return `<tr><td colspan="6" style="text-align:center;padding:20px;">運搬内容または明細を入力してください</td></tr>`;
   }
-  return routes.map(route => {
+
+  let html = "";
+
+  // 1. 各ルート（往路・復路）に対応する行
+  routes.forEach((route, index) => {
     const detail = routeToHtml(route);
-    const summaryHtml = route === routes[0]
-      ? items.map(item => item.description?.trim()).filter(text => text).map(text => `<div class="detail-summary">${escapeHtml(text)}</div>`).join("")
-      : "";
+    const item = items[index];
+    const summaryText = item && item.description ? `<div class="detail-summary">【摘要】${escapeHtml(item.description)}</div>` : "";
     const dateColHtml = formatRouteDateSpan(route);
 
-    return `
+    const qtyText = item ? (item.qty ? `${item.qty}件` : "") : (route.stops.length ? "1件" : "");
+    const unitText = item ? yen(item.unit) : "";
+    const amountText = item ? yen(item.qty * item.unit) : "";
+
+    html += `
       <tr>
         <td class="date-col" style="text-align:center; vertical-align:middle; line-height:1.2;">
           ${dateColHtml}
         </td>
         <td class="type-col" style="text-align:center; vertical-align:middle;">${escapeHtml(route.type)}</td>
-        <td class="detail-col">${detail}${summaryHtml}</td>
-        <td class="qty-col number" style="vertical-align:middle;">${route.stops.length ? "1件" : ""}</td>
-        <td class="unit-col number" style="vertical-align:middle;">${route === routes[0] && items[0] ? yen(items[0].unit) : ""}</td>
-        <td class="amount-col number" style="vertical-align:middle;">${route === routes[0] && items[0] ? yen(items[0].qty * items[0].unit) : ""}</td>
+        <td class="detail-col">${detail}${summaryText}</td>
+        <td class="qty-col number" style="vertical-align:middle;">${qtyText}</td>
+        <td class="unit-col number" style="vertical-align:middle;">${unitText}</td>
+        <td class="amount-col number" style="vertical-align:middle;">${amountText}</td>
       </tr>
     `;
-  }).join("");
+  });
+
+  // 2. ルート数を超えて追加された明細（待機料金や立替金、実費など）
+  if (items.length > routes.length) {
+    for (let i = routes.length; i < items.length; i++) {
+      const extraItem = items[i];
+      html += `
+        <tr>
+          <td class="date-col" style="text-align:center; vertical-align:middle;">-</td>
+          <td class="type-col" style="text-align:center; vertical-align:middle;">その他</td>
+          <td class="detail-col"><div class="detail-main">${escapeHtml(extraItem.description || "追加明細")}</div></td>
+          <td class="qty-col number" style="vertical-align:middle;">${extraItem.qty ? `${extraItem.qty}件` : ""}</td>
+          <td class="unit-col number" style="vertical-align:middle;">${yen(extraItem.unit)}</td>
+          <td class="amount-col number" style="vertical-align:middle;">${yen(extraItem.qty * extraItem.unit)}</td>
+        </tr>
+      `;
+    }
+  }
+
+  return html;
 }
 
 function formatDateShort(dateStr) {
@@ -1422,17 +1462,17 @@ async function runAICheck() {
   };
 
   const prompt = `あなたは物流・運送業（合同会社311BANCHI）の帳票（見積書・請求書）を精査するプロのアシスタントです。
-一時預かりや翌日配達、複数日程にまたがる運搬ルートの整合性を含めて以下の入力データを確認し、ミスや違和感、記載漏れ、日付の矛盾がないかをプロの目線でチェックしてください。
+往路・復路それぞれの個別運賃設定や、一時預かり・翌日配送のルート整合性を含めて以下の入力データを確認し、ミスや違和感、記載漏れ、日付の矛盾がないかをプロの目線でチェックしてください。
 
 【データ】
 ${JSON.stringify(payloadData, null, 2)}
 
 【チェック観点】
-1. 日付の前後関係（搬出日より搬入日が過去になっていないか、発行日と期日の矛盾がないか）
-2. 必須項目の漏れ（会社名、案件名、金額が0円など）
-3. 運搬ルートの搬出・搬入先や住所・日時の整合性
-4. 誤字脱字、敬語の違和感、住所や郵便番号の形式不備
-5. その他取引先へ送るにあたって懸念される事項
+1. 往路・復路の運賃が正しく設定されているか（0円になっていないか）
+2. 日付の前後関係（搬出日より搬入日が過去になっていないか、発行日と期日の矛盾がないか）
+3. 必須項目の漏れ（会社名、案件名など）
+4. 運搬ルートの搬出・搬入先や住所・日時の整合性
+5. 誤字脱字、敬語の違和感、住所や郵便番号の形式不備
 
 問題がなければ「問題は見当たりませんでした」と伝え、修正すべき点や確認すべき点があれば箇条書きで分かりやすくアドバイスしてください。`;
 
@@ -1794,7 +1834,6 @@ document.getElementById("docDate").value = `${yyyy}-${mm}-${dd}`;
 setNextDocumentNumber();
 renderExtraBanks();
 addRoute("往路");
-addItem();
 updatePreview();
 showInvoiceLedger();
 </script>
