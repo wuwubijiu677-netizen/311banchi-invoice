@@ -677,7 +677,7 @@ tr.row-won {
     <div class="row-3">
       <div class="field">
         <label>郵便番号</label>
-        <input id="customerZip" placeholder="〒000-0000">
+        <input id="customerZip" placeholder="〒000-0000" maxlength="8" oninput="autoFillAddress(this.value)">
       </div>
       <div class="field" style="grid-column: span 2;">
         <label>住所</label>
@@ -1005,6 +1005,36 @@ function deleteSelectedClient() {
 
   // ==========================================
 // 取引先マスタ ＆ 取引先管理台帳
+  // ==========================================
+// 郵便番号からの住所自動入力
+// ==========================================
+async function autoFillAddress(val) {
+  // 数字のみを抽出
+  const rawDigits = val.replace(/\D/g, "");
+
+  // 7桁入力された時点で自動検索を実行
+  if (rawDigits.length === 7) {
+    // 表示を「〒000-0000」の形式に自動整形
+    document.getElementById("customerZip").value = `〒${rawDigits.slice(0, 3)}-${rawDigits.slice(3)}`;
+
+    try {
+      const res = await fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${rawDigits}`);
+      const data = await res.json();
+      
+      if (data && data.results && data.results.length > 0) {
+        const item = data.results[0];
+        // 都道府県 + 市区町村 + 町域名 を結合
+        const fullAddr = `${item.address1}${item.address2}${item.address3}`;
+        
+        // 住所欄に自動セット
+        document.getElementById("customerAddress").value = fullAddr;
+        updatePreview();
+      }
+    } catch (e) {
+      console.warn("郵便番号の検索に失敗しました", e);
+    }
+  }
+}
 // ==========================================
 function getClientMaster() {
   try {
