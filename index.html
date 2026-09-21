@@ -58,6 +58,12 @@ h1 {
   gap: 14px;
 }
 
+.row-4 {
+  display: grid;
+  grid-template-columns: 140px 110px 1fr 1.5fr;
+  gap: 10px;
+}
+
 .field {
   margin-bottom: 12px;
 }
@@ -454,8 +460,8 @@ tr.row-paid {
   font-size: 11px;
 }
 
-.doc-table .date-col { width: 75px; }
-.doc-table .type-col { width: 65px; }
+.doc-table .date-col { width: 90px; }
+.doc-table .type-col { width: 60px; }
 .doc-table .detail-col { width: auto; }
 .doc-table .qty-col { width: 55px; }
 .doc-table .unit-col { width: 85px; }
@@ -560,7 +566,6 @@ tr.row-paid {
     overflow: hidden !important;
   }
 
-  /* プレビュー以外の操作UI・見出しを完全非表示 */
   .container,
   .panel,
   .actions,
@@ -684,6 +689,9 @@ tr.row-paid {
 
   <div class="panel">
     <h2>運搬内容</h2>
+    <p style="font-size:12px; color:#666; margin-top:-10px; margin-bottom:14px;">
+      ※宵積みや翌日配達など、搬出と搬入で日付が異なる場合は、下の各地点ごとの「作業日」をそれぞれ変更してください。
+    </p>
     <div id="routes"></div>
     <div class="button-row">
       <button class="btn-sub" onclick="addRoute('往路')">＋ 往路を追加</button>
@@ -783,7 +791,6 @@ tr.row-paid {
     <button class="btn-success" onclick="exportBackupJSON()">💾 バックアップ保存 (JSON)</button>
     <button class="btn-sub" onclick="document.getElementById('restoreFileInput').click()">📂 バックアップ読込</button>
     <button class="btn-sub" onclick="exportCSV()">📊 CSVエクスポート</button>
-    <!-- 隠しファイル入力 -->
     <input type="file" id="restoreFileInput" style="display:none;" accept=".json" onchange="importBackupJSON(event)">
   </div>
 
@@ -939,12 +946,13 @@ function setDocType(type) {
 }
 
 function addRoute(type) {
+  const baseDate = document.getElementById("docDate").value || "";
   const route = {
     type,
-    date: document.getElementById("docDate").value || "",
+    date: baseDate,
     stops: [
-      { kind: "搬出", no: 1, time: "", name: "", address: "" },
-      { kind: "搬入", no: 1, time: "", name: "", address: "" }
+      { kind: "搬出", no: 1, date: baseDate, time: "", name: "", address: "" },
+      { kind: "搬入", no: 1, date: baseDate, time: "", name: "", address: "" }
     ]
   };
   routes.push(route);
@@ -963,14 +971,14 @@ function renderRoutes() {
         <div class="route-title">${route.type}</div>
         <button class="btn-danger" onclick="removeRoute(${routeIndex})">削除</button>
       </div>
-      <div class="route-date-row">
-        <label>作業日</label>
-        <input type="date" value="${escapeHtml(route.date || "")}" onchange="updateRouteDate(${routeIndex}, this.value)">
+      <div class="field" style="margin-bottom:12px;">
+        <label>ルート基準日（初期値）</label>
+        <input type="date" value="${escapeHtml(route.date || "")}" onchange="updateRouteDate(${routeIndex}, this.value)" style="max-width:220px;">
       </div>
       <div id="routeStops${routeIndex}"></div>
       <div class="button-row">
-        <button class="btn-sub" onclick="addStop(${routeIndex}, '搬出')">＋ 搬出</button>
-        <button class="btn-sub" onclick="addStop(${routeIndex}, '搬入')">＋ 搬入</button>
+        <button class="btn-sub" onclick="addStop(${routeIndex}, '搬出')">＋ 搬出を追加</button>
+        <button class="btn-sub" onclick="addStop(${routeIndex}, '搬入')">＋ 搬入を追加</button>
       </div>
     `;
     box.appendChild(div);
@@ -981,6 +989,13 @@ function renderRoutes() {
 function updateRouteDate(routeIndex, value) {
   if (!routes[routeIndex]) return;
   routes[routeIndex].date = value;
+  // 各地点の日付が空、または変更前と同値なら一括更新
+  routes[routeIndex].stops.forEach(stop => {
+    if (!stop.date || stop.date === routes[routeIndex].date) {
+      stop.date = value;
+    }
+  });
+  renderStops(routeIndex);
   updatePreview();
 }
 
@@ -994,22 +1009,28 @@ function renderStops(routeIndex) {
     div.className = "stop";
     const label = `${stop.kind}${stop.no > 1 ? stop.no : ""}`;
     div.innerHTML = `
-      <div class="stop-title">${label}</div>
-      <div class="row-3">
+      <div class="stop-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <span>${label}</span>
+        <button class="btn-danger" style="padding:4px 8px; font-size:12px;" onclick="removeStop(${routeIndex},${stopIndex})">削除</button>
+      </div>
+      <div class="row-4">
+        <div class="field">
+          <label>作業日</label>
+          <input type="date" value="${escapeHtml(stop.date || route.date || "")}" onchange="updateStop(${routeIndex},${stopIndex},'date',this.value)">
+        </div>
         <div class="field">
           <label>時刻</label>
-          <input value="${escapeHtml(stop.time)}" onchange="updateStop(${routeIndex},${stopIndex},'time',this.value)">
+          <input value="${escapeHtml(stop.time)}" placeholder="例: 13:00頃" onchange="updateStop(${routeIndex},${stopIndex},'time',this.value)">
         </div>
         <div class="field">
           <label>名称</label>
-          <input value="${escapeHtml(stop.name)}" onchange="updateStop(${routeIndex},${stopIndex},'name',this.value)">
+          <input value="${escapeHtml(stop.name)}" placeholder="会社・会場名など" onchange="updateStop(${routeIndex},${stopIndex},'name',this.value)">
         </div>
         <div class="field">
           <label>住所</label>
-          <input value="${escapeHtml(stop.address)}" onchange="updateStop(${routeIndex},${stopIndex},'address',this.value)">
+          <input value="${escapeHtml(stop.address)}" placeholder="東京都..." onchange="updateStop(${routeIndex},${stopIndex},'address',this.value)">
         </div>
       </div>
-      <button class="btn-danger" onclick="removeStop(${routeIndex},${stopIndex})">この行を削除</button>
     `;
     box.appendChild(div);
   });
@@ -1017,20 +1038,30 @@ function renderStops(routeIndex) {
 
 function updateStop(routeIndex, stopIndex, key, value) {
   routes[routeIndex].stops[stopIndex][key] = value;
+  updatePreview();
 }
 
 function addStop(routeIndex, kind) {
   const route = routes[routeIndex];
   const count = route.stops.filter(x => x.kind === kind).length + 1;
-  route.stops.push({ kind, no: count, time: "", name: "", address: "" });
+  route.stops.push({
+    kind,
+    no: count,
+    date: route.date || "",
+    time: "",
+    name: "",
+    address: ""
+  });
   renumberStops(route);
-  renderRoutes();
+  renderStops(routeIndex);
+  updatePreview();
 }
 
 function removeStop(routeIndex, stopIndex) {
   routes[routeIndex].stops.splice(stopIndex, 1);
   renumberStops(routes[routeIndex]);
-  renderRoutes();
+  renderStops(routeIndex);
+  updatePreview();
 }
 
 function renumberStops(route) {
@@ -1044,6 +1075,7 @@ function renumberStops(route) {
 function removeRoute(index) {
   routes.splice(index, 1);
   renderRoutes();
+  updatePreview();
 }
 
 function addExtraBank(value = "") {
@@ -1127,14 +1159,40 @@ function getTotals() {
   return { subtotal, tax, total: subtotal + tax };
 }
 
+// 複数日の範囲フォーマット (例: "10/28(水)" または "10/28(水)〜10/29(木)")
+function formatRouteDateSpan(route) {
+  const dates = route.stops
+    .map(s => s.date || route.date)
+    .filter(d => d)
+    .sort();
+
+  if (!dates.length) return "";
+  const minDate = dates[0];
+  const maxDate = dates[dates.length - 1];
+
+  if (minDate === maxDate) {
+    return formatDateShort(minDate);
+  } else {
+    return `${formatDateShort(minDate)}<br>〜<br>${formatDateShort(maxDate)}`;
+  }
+}
+
 function routeToHtml(route) {
   if (!route.stops.length) return "";
+
+  // 全地点の日付が同一か判定
+  const dates = route.stops.map(s => s.date || route.date).filter(d => d);
+  const hasMultipleDates = new Set(dates).size > 1;
+
   return route.stops.map(stop => {
     const number = stop.no > 1 ? `①②③④⑤⑥⑦⑧⑨⑩`[stop.no-1] || stop.no : "";
     const label = stop.kind + number;
+    const stopDate = stop.date || route.date;
+    const dateText = hasMultipleDates && stopDate ? `【${formatDateShort(stopDate)}】` : "";
+
     return `
       <div class="detail-main">
-        ${escapeHtml(label)}${stop.time ? " " + escapeHtml(stop.time) : ""} ${escapeHtml(stop.name || "")}
+        <strong>${escapeHtml(label)}</strong> ${dateText}${stop.time ? " " + escapeHtml(stop.time) : ""} ${escapeHtml(stop.name || "")}
       </div>
       <div class="detail-address">
         ${escapeHtml(stop.address || "")}
@@ -1152,16 +1210,18 @@ function buildRouteRows() {
     const summaryHtml = route === routes[0]
       ? items.map(item => item.description?.trim()).filter(text => text).map(text => `<div class="detail-summary">${escapeHtml(text)}</div>`).join("")
       : "";
-    const routeDate = route.date ? formatDateShort(route.date) : "";
+    const dateColHtml = formatRouteDateSpan(route);
 
     return `
       <tr>
-        <td class="date-col">${escapeHtml(routeDate)}</td>
-        <td class="type-col">${escapeHtml(route.type)}</td>
+        <td class="date-col" style="text-align:center; vertical-align:middle; line-height:1.2;">
+          ${dateColHtml}
+        </td>
+        <td class="type-col" style="text-align:center; vertical-align:middle;">${escapeHtml(route.type)}</td>
         <td class="detail-col">${detail}${summaryHtml}</td>
-        <td class="qty-col number">${route.stops.length ? "1件" : ""}</td>
-        <td class="unit-col number">${route === routes[0] && items[0] ? yen(items[0].unit) : ""}</td>
-        <td class="amount-col number">${route === routes[0] && items[0] ? yen(items[0].qty * items[0].unit) : ""}</td>
+        <td class="qty-col number" style="vertical-align:middle;">${route.stops.length ? "1件" : ""}</td>
+        <td class="unit-col number" style="vertical-align:middle;">${route === routes[0] && items[0] ? yen(items[0].unit) : ""}</td>
+        <td class="amount-col number" style="vertical-align:middle;">${route === routes[0] && items[0] ? yen(items[0].qty * items[0].unit) : ""}</td>
       </tr>
     `;
   }).join("");
@@ -1342,7 +1402,6 @@ async function runAICheck() {
   aiBox.style.display = "block";
   aiResult.textContent = "AIが入力内容を解析中...しばらくお待ちください。";
 
-  // 送信データの集約
   const payloadData = {
     帳票種別: docType === "quote" ? "見積書" : "請求書",
     取引先会社名: document.getElementById("customerCompany").value.trim(),
@@ -1363,13 +1422,13 @@ async function runAICheck() {
   };
 
   const prompt = `あなたは物流・運送業（合同会社311BANCHI）の帳票（見積書・請求書）を精査するプロのアシスタントです。
-以下の入力データを確認し、ミスや違和感、記載漏れ、日付の矛盾がないかをプロの目線でチェックしてください。
+一時預かりや翌日配達、複数日程にまたがる運搬ルートの整合性を含めて以下の入力データを確認し、ミスや違和感、記載漏れ、日付の矛盾がないかをプロの目線でチェックしてください。
 
 【データ】
 ${JSON.stringify(payloadData, null, 2)}
 
 【チェック観点】
-1. 日付の前後関係（発行日と支払期日、作業日の矛盾がないか）
+1. 日付の前後関係（搬出日より搬入日が過去になっていないか、発行日と期日の矛盾がないか）
 2. 必須項目の漏れ（会社名、案件名、金額が0円など）
 3. 運搬ルートの搬出・搬入先や住所・日時の整合性
 4. 誤字脱字、敬語の違和感、住所や郵便番号の形式不備
@@ -1402,7 +1461,7 @@ ${JSON.stringify(payloadData, null, 2)}
   }
 }
 
-// 請求管理台帳の取得と保存
+// 請求管理台帳
 function getInvoiceLedger() {
   try {
     const saved = JSON.parse(localStorage.getItem("311banchi_invoice_ledger") || "[]");
@@ -1462,13 +1521,11 @@ function registerCurrentInvoice() {
   alert("請求管理台帳に登録しました。");
 }
 
-// 台帳一覧の描画＆アラート・集計計算
 function showInvoiceLedger() {
   const body = document.getElementById("invoiceLedgerBody");
   if (!body) return;
   const ledger = getInvoiceLedger();
 
-  // 今日の日付 (時分秒を切り捨てて比較用)
   const today = new Date();
   today.setHours(0,0,0,0);
   const currentYearMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
@@ -1491,7 +1548,6 @@ function showInvoiceLedger() {
     let rowClass = "";
     let badgeHtml = "";
 
-    // 当月売上集計 (請求日基準)
     if (row.invoiceDate && row.invoiceDate.startsWith(currentYearMonth)) {
       totalThisMonth += Number(row.amount || 0);
     }
@@ -1504,12 +1560,10 @@ function showInvoiceLedger() {
       if (deadlineDate && !isNaN(deadlineDate.getTime())) {
         const diffDays = Math.ceil((deadlineDate - today) / (1000 * 60 * 60 * 24));
         if (diffDays < 0) {
-          // 期日超過
           rowClass = "row-overdue";
           badgeHtml = `<span class="badge badge-overdue">⚠️ 超過 ${Math.abs(diffDays)}日</span>`;
           totalOverdue += Number(row.amount || 0);
         } else if (diffDays <= 3) {
-          // 期日間近 (3日以内)
           rowClass = "row-soon";
           badgeHtml = `<span class="badge badge-soon">⏳ 残り${diffDays}日</span>`;
           totalSoon += Number(row.amount || 0);
@@ -1575,11 +1629,6 @@ function deleteInvoiceLedger(index) {
   showInvoiceLedger();
 }
 
-// ==========================================
-// バックアップ・データ復元・CSVエクスポート
-// ==========================================
-
-// 1. JSONバックアップ保存
 function exportBackupJSON() {
   const ledger = getInvoiceLedger();
   const quoteNum = localStorage.getItem("311banchi_quote_number") || initialLastNumbers.quote;
@@ -1603,7 +1652,6 @@ function exportBackupJSON() {
   downloadAnchor.remove();
 }
 
-// 2. JSONバックアップ読込（復元）
 function importBackupJSON(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -1636,7 +1684,6 @@ function importBackupJSON(event) {
   reader.readAsText(file);
 }
 
-// 3. Excel向けCSVエクスポート
 function exportCSV() {
   const ledger = getInvoiceLedger();
   if (!ledger.length) {
