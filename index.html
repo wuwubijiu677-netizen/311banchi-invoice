@@ -786,6 +786,7 @@ tr.row-won {
           <th>見積額</th>
           <th>有効期限</th>
           <th>状況ステータス</th>
+          <th>再見積</th>
           <th>請求書作成</th>
           <th>操作</th>
         </tr>
@@ -1639,10 +1640,13 @@ function showQuoteLedger() {
             <option value="受注" ${row.status === "受注" ? "selected" : ""}>受注</option>
             <option value="失注" ${row.status === "失注" ? "selected" : ""}>失注</option>
           </select>
-        </td>
-        <td>
-          <button class="btn-convert" onclick="convertQuoteToInvoice(${index})">⚡ 請求書へ変換</button>
-        </td>
+       </td>
+      <td>
+        <button class="btn-sub" style="font-weight:bold; padding:6px 10px;" onclick="loadQuoteForRevision(${index})">✏️ 再見積</button>
+      </td>
+      <td>
+        <button class="btn-convert" onclick="convertQuoteToInvoice(${index})">⚡ 請求書へ変換</button>
+      </td>
         <td>
           <button class="btn-danger" onclick="deleteQuoteLedger(${index})">削除</button>
         </td>
@@ -1710,7 +1714,70 @@ function convertQuoteToInvoice(index) {
   window.scrollTo({ top: 0, behavior: "smooth" });
   alert(`見積データを引き継ぎ、請求書を作成しました！\n請求書番号: ${document.getElementById("docNumber").value}\n内容をご確認の上、PDF保存・印刷または台帳登録を行ってください。`);
 }
+// 見積を呼び起こして枝番（-1, -2）を付けて再見積を作成する処理
+function loadQuoteForRevision(index) {
+  const ledger = getQuoteLedger();
+  const q = ledger[index];
+  if (!q) return;
 
+  if (!confirm(`見積「${q.subject}」を呼び起こして再見積を作成しますか？`)) return;
+
+  // 1. フォームへのデータ呼び起こし
+  document.getElementById("customerCompany").value = q.customer || "";
+  document.getElementById("customerDept").value = q.dept || "";
+  document.getElementById("customerPerson").value = q.person || "";
+  document.getElementById("subject").value = q.subject || "";
+  document.getElementById("customerZip").value = q.zip || "";
+  document.getElementById("customerAddress").value = q.address || "";
+  document.getElementById("customerBuilding").value = q.building || "";
+  document.getElementById("cargo").value = q.cargo || "イベント備品";
+  document.getElementById("notes").value = q.notes || "";
+  document.getElementById("deadline").value = q.deadline || "";
+
+  // 日付を今日に更新
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
+  document.getElementById("docDate").value = `${yyyy}-${mm}-${dd}`;
+
+  // ルート・明細の展開
+  routes = q.routes ? JSON.parse(JSON.stringify(q.routes)) : [];
+  items = q.items ? JSON.parse(JSON.stringify(q.items)) : [];
+  renderRoutes();
+  renderItems();
+
+  // 見積書モードに切り替え
+  docType = "quote";
+  document.getElementById("quoteBtn").classList.add("active");
+  document.getElementById("invoiceBtn").classList.remove("active");
+  document.getElementById("dateLabel").textContent = "見積日";
+  document.getElementById("deadlineLabel").textContent = "有効期限";
+
+  // 2. 枝番の自動計算（元が Q-0000000333 なら Q-0000000333-1、次は -2）
+  const baseNumber = q.quoteNumber.split("-").slice(0, 2).join("-");
+  
+  let maxBranch = 0;
+  ledger.forEach(item => {
+    if (item.quoteNumber.startsWith(baseNumber)) {
+      const parts = item.quoteNumber.split("-");
+      if (parts.length >= 3) {
+        const branchNum = parseInt(parts[2], 10);
+        if (!isNaN(branchNum) && branchNum > maxBranch) {
+          maxBranch = branchNum;
+        }
+      }
+    }
+  });
+
+  const nextBranchNumber = maxBranch + 1;
+  const newQuoteNumber = `${baseNumber}-${nextBranchNumber}`;
+  document.getElementById("docNumber").value = newQuoteNumber;
+
+  updatePreview();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  alert(`見積データを呼び出しました！\n改訂版の見積番号: ${newQuoteNumber}\n内容を修正して「現在の見積書を登録」を行ってください。`);
+}
 // ==========================================
 // 請求管理台帳
 // ==========================================
