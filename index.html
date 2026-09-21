@@ -209,7 +209,7 @@ button {
   text-align: right;
 }
 
-/* サマリーカード */
+/* サマリーカード表示 */
 .summary-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -255,7 +255,7 @@ button {
   color: #c05621;
 }
 
-/* アラート・行装飾 */
+/* アラート・装飾 */
 tr.row-overdue {
   background-color: #ffebee !important;
 }
@@ -1551,7 +1551,6 @@ function saveQuoteLedger(ledger) {
   localStorage.setItem("311banchi_quote_ledger", JSON.stringify(ledger));
 }
 
-// 現在の見積書を台帳に登録
 function registerCurrentQuote() {
   if (docType !== "quote") {
     alert("見積書に切り替えてから登録してください。");
@@ -1678,7 +1677,7 @@ function convertQuoteToInvoice(index) {
 
   if (!confirm(`見積「${q.subject}」のデータをもとに請求書を作成しますか？`)) return;
 
-  // 1. フォームへのデータ反映
+  // フォームへのデータ反映
   document.getElementById("customerCompany").value = q.customer || "";
   document.getElementById("customerDept").value = q.dept || "";
   document.getElementById("customerPerson").value = q.person || "";
@@ -1689,29 +1688,26 @@ function convertQuoteToInvoice(index) {
   document.getElementById("cargo").value = q.cargo || "イベント備品";
   document.getElementById("notes").value = q.notes || "";
 
-  // 日付を今日に設定
   const today = new Date();
   const yyyy = today.getFullYear();
   const mm = String(today.getMonth() + 1).padStart(2, "0");
   const dd = String(today.getDate()).padStart(2, "0");
   document.getElementById("docDate").value = `${yyyy}-${mm}-${dd}`;
 
-  // ルートと明細のディープコピー展開
   routes = q.routes ? JSON.parse(JSON.stringify(q.routes)) : [];
   items = q.items ? JSON.parse(JSON.stringify(q.items)) : [];
 
   renderRoutes();
   renderItems();
 
-  // 2. 帳票種別を請求書に切り替え（番号もINVに自動更新）
+  // 請求書に切り替え＆自動採番
   setDocType("invoice");
 
-  // 3. 見積ステータスを受注に更新
+  // 見積ステータスを受注に更新
   q.status = "受注";
   saveQuoteLedger(ledger);
   showQuoteLedger();
 
-  // 画面上部へスクロールして案内
   window.scrollTo({ top: 0, behavior: "smooth" });
   alert(`見積データを引き継ぎ、請求書を作成しました！\n請求書番号: ${document.getElementById("docNumber").value}\n内容をご確認の上、PDF保存・印刷または台帳登録を行ってください。`);
 }
