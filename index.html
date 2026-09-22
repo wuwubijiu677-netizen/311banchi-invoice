@@ -725,6 +725,7 @@ tr.row-won {
           </div>
         </div>
       </div>
+
       <div class="field">
         <label>部署名</label>
         <input id="customerDept">
@@ -753,7 +754,7 @@ tr.row-won {
         <label>建物名・階数</label>
         <input id="customerBuilding">
       </div>
-     <div class="field">
+      <div class="field">
         <label>適格請求書登録番号（インボイス番号）</label>
         <div style="display:flex; gap:8px;">
           <input id="customerInvoiceNo" placeholder="T1234567890123" maxlength="14" oninput="formatInvoiceNumber(this)" style="flex:1;">
@@ -991,14 +992,22 @@ function saveClientMasterList(list) {
 }
 
 // インボイス登録番号の入力フォーマット整形
- // ==========================================
-// インボイス番号の国税庁Web照会＆自動取り込み
-// ==========================================
+function formatInvoiceNumber(input) {
+  let val = input.value.trim().toUpperCase();
+  val = val.replace(/[Ａ-Ｚａ-ｚ０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+  
+  if (val.length > 0 && !val.startsWith("T")) {
+    const digits = val.replace(/\D/g, "");
+    if (digits) val = "T" + digits;
+  }
+  input.value = val;
+}
+
+// 国税庁Web照会＆自動取り込み
 async function lookupInvoiceNumber() {
   const invInput = document.getElementById("customerInvoiceNo");
   let val = invInput.value.trim().toUpperCase();
   
-  // Tが付いていなければ付与
   if (val && !val.startsWith("T")) {
     const digits = val.replace(/\D/g, "");
     if (digits) val = "T" + digits;
@@ -1018,7 +1027,6 @@ async function lookupInvoiceNumber() {
   }
 
   try {
-    // 国税庁公表サイトのWebデータを取得（オープンプロキシ経由）
     const targetUrl = `https://www.invoice-kohyo.nta.go.jp/houjin-bangou-shousai.html?id=${val.slice(1)}`;
     const apiUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
     
@@ -1027,12 +1035,9 @@ async function lookupInvoiceNumber() {
     const json = await res.json();
     const htmlText = json.contents;
 
-    // HTMLパース
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlText, "text/html");
 
-    // 商号・名称と所在地を抽出
-    // 国税庁公表ページの構造から取得
     let name = "";
     let address = "";
 
@@ -1049,12 +1054,10 @@ async function lookupInvoiceNumber() {
     });
 
     if (!name) {
-      // 該当なし、または個人の屋号非公表などの場合
       alert(`インボイス番号「${val}」の法人情報を自動取得できませんでした。\n国税庁サイト上で登録があるか直接確認してください。\nURL: ${targetUrl}`);
       return;
     }
 
-    // フォームへ自動反映
     if (confirm(`【国税庁の登録情報が見つかりました】\n\n会社名: ${name}\n所在地: ${address}\n\nこの内容を宛先欄に取り込みますか？`)) {
       document.getElementById("customerCompany").value = name;
       if (address) {
@@ -1073,10 +1076,9 @@ async function lookupInvoiceNumber() {
       btn.textContent = originalText;
     }
   }
-} 
-// ==========================================
+}
+
 // 会社名からインボイス番号・住所を逆引き検索
-// ==========================================
 function openCompanySearchModal() {
   const currentName = document.getElementById("customerCompany").value.trim();
   const modal = document.getElementById("companySearchModal");
@@ -1164,7 +1166,7 @@ async function executeCompanySearch() {
     try {
       list = JSON.parse(reply);
     } catch (e) {
-      throw new Error("AIの返答を解析できませんでした。もう一度お試しください。");
+      throw new Error("AIの返答形式を解析できませんでした。もう一度お試しください。");
     }
 
     if (!Array.isArray(list) || list.length === 0) {
@@ -1201,6 +1203,7 @@ async function executeCompanySearch() {
     resultsEl.innerHTML = `<div style="text-align:center; padding:20px; color:#c53030;"><strong>エラー詳細:</strong><br>${escapeHtml(err.message)}</div>`;
   }
 }
+
 // 候補一覧から選んだデータを入力フォームへ自動反映
 function applyCompanySearchResult(item) {
   if (!item) return;
@@ -1219,17 +1222,6 @@ function applyCompanySearchResult(item) {
   updatePreview();
   closeCompanySearchModal();
   alert(`「${item.company}」の情報を反映しました！\nインボイス番号: ${item.invoiceNo || "なし"}\n内容をご確認の上、必要に応じて取引先マスタへ保存してください。`);
-}
-  
-function formatInvoiceNumber(input) {
-  let val = input.value.trim().toUpperCase();
-  val = val.replace(/[Ａ-Ｚａ-ｚ０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
-  
-  if (val.length > 0 && !val.startsWith("T")) {
-    const digits = val.replace(/\D/g, "");
-    if (digits) val = "T" + digits;
-  }
-  input.value = val;
 }
 
 // ドロップダウンの選択肢を更新
@@ -2345,7 +2337,6 @@ function deleteQuoteLedger(index) {
   showQuoteLedger();
 }
 
-// 見積から請求書へのワンクリック変換処理
 function convertQuoteToInvoice(index) {
   const ledger = getQuoteLedger();
   const q = ledger[index];
@@ -2386,7 +2377,6 @@ function convertQuoteToInvoice(index) {
   alert(`見積データを引き継ぎ、請求書を作成しました！\n請求書番号: ${document.getElementById("docNumber").value}\n内容をご確認の上、PDF保存・印刷または台帳登録を行ってください。`);
 }
 
-// 見積を呼び起こして枝番（-1, -2）を付けて再見積を作成する処理
 function loadQuoteForRevision(index) {
   const ledger = getQuoteLedger();
   const q = ledger[index];
