@@ -1109,8 +1109,8 @@ async function executeCompanySearch() {
     return;
   }
 
-  statusEl.textContent = `「${query}」の法人番号・インボイス情報を照会中...`;
-  resultsEl.innerHTML = '<div style="text-align:center; padding:30px; color:#0284c7;">🔍 データを検索しています...</div>';
+  statusEl.textContent = `「${query}」の国税庁公表情報をWeb検索中...`;
+  resultsEl.innerHTML = '<div style="text-align:center; padding:30px; color:#0284c7;">🔍 国税庁・法人登記公表データを照会しています...</div>';
 
   const apiKey = localStorage.getItem("311banchi_gemini_key") || "";
 
@@ -1120,15 +1120,31 @@ async function executeCompanySearch() {
     return;
   }
 
-  const prompt = `日本の実在法人「${query}」について、国税庁適格請求書発行事業者公表情報および登記情報をもとに検索してください。
-一致または有力な候補を最大5件挙げてください。
+  // 自社（311BANCHI）が検索された場合の確定ガード
+  if (query.includes("311BANCHI") || query.includes("311banchi")) {
+    const selfItem = {
+      company: "合同会社311BANCHI",
+      invoiceNo: "T7011703003439",
+      zip: "〒133-0073",
+      address: "東京都江戸川区鹿骨一丁目55番14号 グラントールⅡ 204"
+    };
+    renderSearchResults([selfItem]);
+    return;
+  }
 
-必ず以下のJSON配列のみを出力してください（解説やMarkdown記法\`\`\`jsonは不要です）。
+  const prompt = `Web検索機能を使用して、日本の法人「${query}」の国税庁インボイス公表情報（適格請求書発行事業者）および法人番号公表サイトの正確な最新データを検索してください。
+
+【厳格ルール】
+・推測や架空の住所・番号は絶対に作らないでください。
+・Web上の公表情報で確実に確認できた情報のみ記載してください。
+・法人のインボイス番号は「T + 13桁の法人番号」です。
+
+必ず以下のJSON配列形式のみを出力してください（Markdownの\`\`\`jsonブロックも含めず、JSONテキストのみ）：
 [
   {
-    "company": "正式な商号（株式会社や合同会社を含む）",
-    "invoiceNo": "Tから始まる13桁の登録番号（不明なら空文字）",
-    "zip": "郵便番号（例: 〒100-0001）",
+    "company": "正式商号",
+    "invoiceNo": "Tから始まる13桁の登録番号（未確認なら空文字）",
+    "zip": "郵便番号",
     "address": "本店所在地"
   }
 ]`;
@@ -1137,25 +1153,25 @@ async function executeCompanySearch() {
     const targetModel = "gemini-3.6-flash";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
     
+    // Googleリアルタイム検索ツールを有効化
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
+        contents: [{ parts: [{ text: prompt }] }],
+        tools: [{ googleSearch: {} }]
       })
     });
 
     if (!res.ok) {
       const errJson = await res.json().catch(() => ({}));
-      const detailedMsg = errJson.error?.message || `HTTPステータス: ${res.status} (${res.statusText})`;
-      throw new Error(detailedMsg);
+      throw new Error(errJson.error?.message || `HTTP ${res.status}`);
     }
 
     const data = await res.json();
     let reply = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
 
     reply = reply.replace(/```json/gi, "").replace(/```/g, "").trim();
-
     const jsonStart = reply.indexOf("[");
     const jsonEnd = reply.lastIndexOf("]");
     if (jsonStart !== -1 && jsonEnd !== -1) {
@@ -1166,36 +1182,10 @@ async function executeCompanySearch() {
     try {
       list = JSON.parse(reply);
     } catch (e) {
-      throw new Error("AIの返答形式を解析できませんでした。もう一度お試しください。");
+      throw new Error("検索結果を正しく解析できませんでした。もう一度お試しください。");
     }
 
-    if (!Array.isArray(list) || list.length === 0) {
-      statusEl.textContent = "該当する法人情報が見つかりませんでした。";
-      resultsEl.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">該当なし。会社名をより詳しく（株式会社などを付けて）入力してください。</div>';
-      return;
-    }
-
-    statusEl.textContent = `${list.length}件の候補が見つかりました。「取込」を押すと宛先欄へ反映されます。`;
-    resultsEl.innerHTML = list.map((item) => {
-      const invBadge = item.invoiceNo 
-        ? `<span style="font-family:monospace; background:#e0e7ff; color:#1e40af; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:12px;">${escapeHtml(item.invoiceNo)}</span>`
-        : `<span style="color:#94a3b8; font-size:12px;">番号未登録 / 不明</span>`;
-
-      const itemAttr = escapeHtml(JSON.stringify(item));
-
-      return `
-        <div style="border-bottom:1px solid #eee; padding:10px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
-          <div style="flex:1;">
-            <div style="font-weight:bold; font-size:15px; margin-bottom:3px; color:#111;">${escapeHtml(item.company)}</div>
-            <div style="font-size:13px; color:#555; margin-bottom:4px;">📍 ${escapeHtml(item.zip || "")} ${escapeHtml(item.address || "-")}</div>
-            <div>${invBadge}</div>
-          </div>
-          <div>
-            <button type="button" class="btn-main" style="padding:6px 14px; font-size:13px; font-weight:bold;" onclick='applyCompanySearchResult(${itemAttr})'>取込</button>
-          </div>
-        </div>
-      `;
-    }).join("");
+    renderSearchResults(list);
 
   } catch (err) {
     console.error("検索エラー:", err);
@@ -1204,8 +1194,39 @@ async function executeCompanySearch() {
   }
 }
 
-// 候補一覧から選んだデータを入力フォームへ自動反映
-function applyCompanySearchResult(item) {
+// 検索結果を描画する処理
+function renderSearchResults(list) {
+  const statusEl = document.getElementById("companySearchStatus");
+  const resultsEl = document.getElementById("companySearchResults");
+
+  if (!Array.isArray(list) || list.length === 0) {
+    statusEl.textContent = "公表情報が見つかりませんでした。";
+    resultsEl.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">該当なし。会社名をより正確に入力して再検索してください。</div>';
+    return;
+  }
+
+  statusEl.textContent = `${list.length}件の候補が見つかりました。「取込」を押すと宛先欄へ反映されます。`;
+  resultsEl.innerHTML = list.map((item) => {
+    const invBadge = item.invoiceNo 
+      ? `<span style="font-family:monospace; background:#e0e7ff; color:#1e40af; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:12px;">${escapeHtml(item.invoiceNo)}</span>`
+      : `<span style="color:#94a3b8; font-size:12px;">番号未確認</span>`;
+
+    const itemAttr = escapeHtml(JSON.stringify(item));
+
+    return `
+      <div style="border-bottom:1px solid #eee; padding:10px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+        <div style="flex:1;">
+          <div style="font-weight:bold; font-size:15px; margin-bottom:3px; color:#111;">${escapeHtml(item.company)}</div>
+          <div style="font-size:13px; color:#555; margin-bottom:4px;">📍 ${escapeHtml(item.zip || "")} ${escapeHtml(item.address || "-")}</div>
+          <div>${invBadge}</div>
+        </div>
+        <div>
+          <button type="button" class="btn-main" style="padding:6px 14px; font-size:13px; font-weight:bold;" onclick='applyCompanySearchResult(${itemAttr})'>取込</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
   if (!item) return;
 
   document.getElementById("customerCompany").value = item.company || "";
