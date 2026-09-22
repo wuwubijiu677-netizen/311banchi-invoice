@@ -1306,7 +1306,7 @@ function saveCurrentAsClient() {
   };
 
   const list = getClientMaster();
-  const existingIdx = list.findIndex(c => c.company === company);
+  const existingIdx = list.findIndex(c => c.company === company && c.person === clientData.person);
 
   if (existingIdx >= 0) {
     if (confirm(`「${company}」は既に登録されています。最新の入力内容で上書き更新しますか？`)) {
