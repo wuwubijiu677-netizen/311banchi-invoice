@@ -1227,6 +1227,9 @@ function renderSearchResults(list) {
     `;
   }).join("");
 }
+
+// 候補一覧から選んだデータを入力フォームへ自動反映
+function applyCompanySearchResult(item) {
   if (!item) return;
 
   document.getElementById("customerCompany").value = item.company || "";
@@ -2107,7 +2110,7 @@ ${currentPayloadStr}
 ・問題がある場合は、修正すべき要点を1〜2行で短く教えてください。`;
 
   try {
-    const targetModel = "gemini-2.5-flash";
+    const targetModel = "gemini-3.6-flash";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
     const res = await fetch(url, {
       method: "POST",
@@ -2197,7 +2200,7 @@ ${JSON.stringify(payloadData, null, 2)}
 修正すべき点があれば箇条書きで簡潔にアドバイスし、問題がなければ「実務上問題は見当たりませんでした」と伝えてください。`;
 
   try {
-    const targetModel = "gemini-2.5-flash";
+    const targetModel = "gemini-3.6-flash";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
     const res = await fetch(url, {
       method: "POST",
