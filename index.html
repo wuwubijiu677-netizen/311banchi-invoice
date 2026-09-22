@@ -725,6 +725,10 @@ tr.row-won {
         <label>建物名・階数</label>
         <input id="customerBuilding">
       </div>
+      <div class="field">
+        <label>適格請求書登録番号（インボイス番号）</label>
+        <input id="customerInvoiceNo" placeholder="T1234567890123" maxlength="14" oninput="formatInvoiceNumber(this)">
+      </div>
     </div>
     <div class="row-3">
       <div class="field">
@@ -861,6 +865,7 @@ tr.row-won {
           <th style="width:140px;">部署名</th>
           <th style="width:120px;">ご担当者</th>
           <th>住所・所在地</th>
+          <th style="width:140px;">登録番号</th>
           <th style="width:100px;">入力反映</th>
           <th style="width:80px;">操作</th>
         </tr>
@@ -1046,6 +1051,193 @@ function deleteSelectedClient() {
   // ==========================================
 // 取引先マスタ ＆ 取引先管理台帳
   // ==========================================
+  // ==========================================
+// 取引先マスタ ＆ 取引先管理台帳（インボイス番号対応版）
+// ==========================================
+function getClientMaster() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("311banchi_client_master") || "[]");
+    return Array.isArray(saved) ? saved : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveClientMasterList(list) {
+  localStorage.setItem("311banchi_client_master", JSON.stringify(list));
+}
+
+// インボイス登録番号の入力フォーマット整形（先頭に自動でTを付与、英大文字・半角数字化）
+function formatInvoiceNumber(input) {
+  let val = input.value.trim().toUpperCase();
+  // 全角英数を半角に変換
+  val = val.replace(/[Ａ-Ｚａ-ｚ０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+  
+  if (val.length > 0 && !val.startsWith("T")) {
+    const digits = val.replace(/\D/g, "");
+    if (digits) val = "T" + digits;
+  }
+  input.value = val;
+}
+
+// ドロップダウンの選択肢を更新
+function renderClientMasterSelect() {
+  const select = document.getElementById("clientMasterSelect");
+  if (!select) return;
+  const list = getClientMaster();
+  
+  select.innerHTML = '<option value="">-- 保存済みの取引先を選択 --</option>';
+  list.forEach((client, idx) => {
+    const opt = document.createElement("option");
+    opt.value = idx;
+    const invBadge = client.invoiceNo ? " [適格]" : "";
+    opt.textContent = client.company + (client.person ? ` (${client.person}様)` : "") + invBadge;
+    select.appendChild(opt);
+  });
+}
+
+// 選択した取引先をフォームへ自動入力
+function applyClientMaster(idxStr) {
+  if (idxStr === "" || idxStr === undefined) return;
+  const list = getClientMaster();
+  const c = list[Number(idxStr)];
+  if (!c) return;
+
+  document.getElementById("customerCompany").value = c.company || "";
+  document.getElementById("customerDept").value = c.dept || "";
+  document.getElementById("customerPerson").value = c.person || "";
+  document.getElementById("customerZip").value = c.zip || "";
+  document.getElementById("customerAddress").value = c.address || "";
+  document.getElementById("customerBuilding").value = c.building || "";
+  document.getElementById("customerInvoiceNo").value = c.invoiceNo || "";
+  
+  const select = document.getElementById("clientMasterSelect");
+  if (select) select.value = idxStr;
+  
+  updatePreview();
+}
+
+// 現在の宛先フォームの内容をマスタに登録・更新
+function saveCurrentAsClient() {
+  const company = document.getElementById("customerCompany").value.trim();
+  if (!company) {
+    alert("会社名を入力してください。");
+    return;
+  }
+
+  const invoiceNo = document.getElementById("customerInvoiceNo").value.trim();
+  if (invoiceNo && !/^T\d{13}$/.test(invoiceNo)) {
+    if (!confirm(`入力された登録番号「${invoiceNo}」は、国税庁の標準形式（T + 13桁の数字）と異なります。\nこのまま登録しますか？`)) {
+      return;
+    }
+  }
+
+  const clientData = {
+    company: company,
+    dept: document.getElementById("customerDept").value.trim(),
+    person: document.getElementById("customerPerson").value.trim(),
+    zip: document.getElementById("customerZip").value.trim(),
+    address: document.getElementById("customerAddress").value.trim(),
+    building: document.getElementById("customerBuilding").value.trim(),
+    invoiceNo: invoiceNo
+  };
+
+  const list = getClientMaster();
+  const existingIdx = list.findIndex(c => c.company === company);
+
+  if (existingIdx >= 0) {
+    if (confirm(`「${company}」は既に登録されています。最新の入力内容で上書き更新しますか？`)) {
+      list[existingIdx] = clientData;
+      saveClientMasterList(list);
+      renderClientMasterSelect();
+      showClientMasterTable();
+      document.getElementById("clientMasterSelect").value = existingIdx;
+      alert("取引先マスタを更新しました！");
+    }
+  } else {
+    list.push(clientData);
+    list.sort((a, b) => a.company.localeCompare(b.company, "ja"));
+    saveClientMasterList(list);
+    renderClientMasterSelect();
+    showClientMasterTable();
+    const newIdx = list.findIndex(c => c.company === company);
+    if (newIdx >= 0) document.getElementById("clientMasterSelect").value = newIdx;
+    alert(`「${company}」を取引先マスタに登録しました！`);
+  }
+}
+
+// ドロップダウン選択中の取引先を削除
+function deleteSelectedClient() {
+  const select = document.getElementById("clientMasterSelect");
+  const idx = select.value;
+  if (idx === "") {
+    alert("削除したい取引先をドロップダウンから選択してください。");
+    return;
+  }
+
+  const list = getClientMaster();
+  const target = list[Number(idx)];
+  if (!target) return;
+
+  if (!confirm(`取引先マスタから「${target.company}」を削除しますか？`)) return;
+
+  list.splice(Number(idx), 1);
+  saveClientMasterList(list);
+  renderClientMasterSelect();
+  showClientMasterTable();
+  select.value = "";
+  alert("取引先マスタから削除しました。");
+}
+
+// 取引先管理台帳（一覧表）の描画処理
+function showClientMasterTable() {
+  const tbody = document.getElementById("clientMasterTableBody");
+  if (!tbody) return;
+  const list = getClientMaster();
+
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;">登録済みの取引先はありません。「現在の宛先を新規登録・更新」から登録できます。</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = list.map((c, i) => {
+    const addressFull = [c.zip, c.address, c.building].filter(Boolean).join(" ");
+    const invDisplay = c.invoiceNo 
+      ? `<span style="font-family:monospace; font-weight:bold; color:#1e40af;">${escapeHtml(c.invoiceNo)}</span>` 
+      : '<span style="color:#94a3b8; font-size:12px;">未登録</span>';
+
+    return `
+      <tr>
+        <td><strong>${escapeHtml(c.company)}</strong></td>
+        <td>${escapeHtml(c.dept || "-")}</td>
+        <td>${escapeHtml(c.person ? c.person + " 様" : "-")}</td>
+        <td style="font-size:13px;">${escapeHtml(addressFull || "-")}</td>
+        <td style="text-align:center;">${invDisplay}</td>
+        <td style="text-align:center;">
+          <button class="btn-sub" style="font-weight:bold; padding:6px 10px;" onclick="applyClientMaster(${i}); window.scrollTo({top:0, behavior:'smooth'});">⬆ 反映</button>
+        </td>
+        <td style="text-align:center;">
+          <button class="btn-danger" style="padding:6px 10px;" onclick="deleteClientByIndex(${i})">削除</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+// 台帳の一覧から直接削除する処理
+function deleteClientByIndex(index) {
+  const list = getClientMaster();
+  const target = list[index];
+  if (!target) return;
+
+  if (!confirm(`取引先「${target.company}」をマスタから削除しますか？`)) return;
+
+  list.splice(index, 1);
+  saveClientMasterList(list);
+  renderClientMasterSelect();
+  showClientMasterTable();
+  alert("取引先マスタから削除しました。");
+}
 // 郵便番号からの住所自動入力
 // ==========================================
 async function autoFillAddress(val) {
@@ -2568,6 +2760,7 @@ function resetForm() {
     if (el.id !== "geminiApiKey") el.value = "";
   });
   document.getElementById("cargo").value = "イベント備品";
+  document.getElementById("customerInvoiceNo").value = "";
 
   routes = [];
   items = [];
