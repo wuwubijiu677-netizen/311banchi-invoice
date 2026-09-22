@@ -1134,7 +1134,7 @@ async function executeCompanySearch() {
 ]`;
 
   try {
-    const targetModel = "gemini-2.5-flash";
+    const targetModel = "gemini-3.6-flash";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
     
     const res = await fetch(url, {
