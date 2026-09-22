@@ -940,6 +940,7 @@ tr.row-won {
     <button class="btn-success" onclick="exportBackupJSON()">💾 バックアップ保存 (JSON)</button>
     <button class="btn-sub" onclick="document.getElementById('restoreFileInput').click()">📂 バックアップ読込</button>
     <button class="btn-sub" onclick="exportCSV()">📊 CSVエクスポート</button>
+    <button class="btn-convert" style="background:#2563eb;" onclick="exportFreeeCSV()">☁️ freee用仕訳CSV出力</button>
     <input type="file" id="restoreFileInput" style="display:none;" accept=".json" onchange="importBackupJSON(event)">
   </div>
 
@@ -2702,7 +2703,89 @@ function importBackupJSON(event) {
   reader.readAsText(file);
 }
 
-function exportCSV() {
+// ==========================================
+// freee専用 仕訳インポート用CSVエクスポート
+// ==========================================
+function exportFreeeCSV() {
+  const ledger = getInvoiceLedger();
+  if (!ledger.length) {
+    alert("エクスポートする請求データがありません。");
+    return;
+  }
+
+  // 未登録の請求データを抽出（すべて登録済の場合は全件対象にするか確認）
+  let targets = ledger.filter(r => r.freeeStatus === "未登録");
+  if (!targets.length) {
+    if (!confirm("「未登録」の請求書はありません。\n登録済みのデータも含めてすべての請求書を出力しますか？")) {
+      return;
+    }
+    targets = ledger;
+  }
+
+  // freeeの「エクセル・CSVインポート（収入・売掛金取引）」標準ヘッダー
+  const headers = [
+    "収支区分",
+    "管理番号",
+    "発生日",
+    "決済期日",
+    "取引先",
+    "勘定科目",
+    "税区分",
+    "金額",
+    "税計算区分",
+    "税額",
+    "備考",
+    "品目",
+    "決済状況"
+  ];
+
+  // 1件ずつの売上取引レコードを生成
+  const rows = targets.map(r => {
+    // 税込金額から消費税10%分を逆算（内税算出）
+    const totalAmount = Number(r.amount || 0);
+    const taxAmount = Math.floor(totalAmount - (totalAmount / 1.10));
+
+    return [
+      `"収入"`,                                            // 収支区分
+      `"${r.invoiceNumber}"`,                               // 管理番号（請求書番号）
+      `"${r.invoiceDate}"`,                                 // 発生日（請求日）
+      `"${r.deadline || ""}"`,                              // 決済期日（入金期日）
+      `"${(r.customer || "").replace(/"/g, '""')}"`,        // 取引先名
+      `"売上高"`,                                          // 勘定科目
+      `"課税売上10%"`,                                     // 税区分（インボイス適格）
+      totalAmount,                                          // 金額（税込）
+      `"税込"`,                                            // 税計算区分
+      taxAmount,                                            // 税額
+      `"${(r.subject || "").replace(/"/g, '""')}"`,         // 備考（案件名）
+      `"運搬業務"`,                                        // 品目
+      `"${r.paymentStatus === "入金済" ? "完了" : "未決済"}"` // 決済状況
+    ];
+  });
+
+  // UTF-8 BOM付きCSVを作成（Excelやfreeeで文字化けしない対策）
+  const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(e => e.join(",")).join("\r\n")].join("\r\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const yyyymmdd = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `freee仕訳インポート_売上_${yyyymmdd}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  // 出力対象にしたデータの freeeステータスを「登録済」に一括更新
+  if (confirm(`freee用CSVを出力しました！（対象: ${targets.length}件）\n台帳のfreeeステータスを「登録済」に更新しますか？`)) {
+    targets.forEach(target => {
+      const idx = ledger.findIndex(x => x.invoiceNumber === target.invoiceNumber);
+      if (idx >= 0) {
+        ledger[idx].freeeStatus = "登録済";
+      }
+    });
+    saveInvoiceLedger(ledger);
+    showInvoiceLedger();
+  }
+}
   const ledger = getInvoiceLedger();
   if (!ledger.length) {
     alert("エクスポートする請求データがありません。");
