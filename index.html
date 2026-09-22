@@ -2628,8 +2628,8 @@ function deleteInvoiceLedger(index) {
   showInvoiceLedger();
 }
 
-// バックアップ・復元・CSV
-function exportBackupJSON() {
+// バックアップ保存（Googleドライブ等へ直接保存可能）
+async function exportBackupJSON() {
   const invoiceLedger = getInvoiceLedger();
   const quoteLedger = getQuoteLedger();
   const clientMaster = getClientMaster();
@@ -2646,14 +2646,40 @@ function exportBackupJSON() {
     clientMaster: clientMaster
   };
 
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
-  const downloadAnchor = document.createElement("a");
+  const jsonStr = JSON.stringify(backupData, null, 2);
   const yyyymmdd = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  downloadAnchor.setAttribute("href", dataStr);
-  downloadAnchor.setAttribute("download", `311BANCHI_会計バックアップ_${yyyymmdd}.json`);
-  document.body.appendChild(downloadAnchor);
-  downloadAnchor.click();
-  downloadAnchor.remove();
+  const defaultFileName = `311BANCHI_会計バックアップ_${yyyymmdd}.json`;
+
+  // 保存先フォルダ（Googleドライブ等）を自分で指定して保存する仕組み
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: defaultFileName,
+        types: [{
+          description: "JSONバックアップファイル",
+          accept: { "application/json": [".json"] }
+        }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(jsonStr);
+      await writable.close();
+      alert("✅ Googleドライブ等の指定フォルダへ正常にバックアップを保存しました！");
+      return;
+    } catch (e) {
+      if (e.name === "AbortError") return; // ユーザーがキャンセルした場合は何もしない
+      console.warn("Picker fallback:", e);
+    }
+  }
+
+  // 非対応ブラウザ用の通常ダウンロード
+  const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", defaultFileName);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
 function importBackupJSON(event) {
