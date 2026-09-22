@@ -698,8 +698,32 @@ tr.row-won {
     </div>
     <div class="row">
       <div class="field">
-        <label>会社名</label>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+          <label style="margin:0;">会社名</label>
+          <button type="button" class="btn-sub" style="padding:3px 8px; font-size:12px; font-weight:bold; background:#e0f2fe; color:#0369a1;" onclick="openCompanySearchModal()">🔍 会社名からインボイス・住所を検索</button>
+        </div>
         <input id="customerCompany" value="">
+      </div>
+
+      <!-- 会社名・インボイス逆引きモーダル -->
+      <div id="companySearchModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:10000; align-items:center; justify-content:center;">
+        <div style="background:#fff; width:90%; max-width:650px; border-radius:12px; padding:20px; box-shadow:0 4px 20px rgba(0,0,0,0.25); max-height:90vh; display:flex; flex-direction:column;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #ddd; padding-bottom:10px;">
+            <h3 style="margin:0; font-size:18px; color:#1e3a8a;">🏢 会社名からインボイス番号・住所を逆引き</h3>
+            <button type="button" onclick="closeCompanySearchModal()" style="background:none; border:none; font-size:20px; cursor:pointer;">✕</button>
+          </div>
+          
+          <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <input id="searchCompanyNameInput" placeholder="会社名を入力（例：ヤマト運輸、佐川急便 など）" style="flex:1;">
+            <button type="button" class="btn-main" onclick="executeCompanySearch()" style="white-space:nowrap; padding:9px 15px;">検索</button>
+          </div>
+
+          <div id="companySearchStatus" style="font-size:13px; color:#666; margin-bottom:8px;"></div>
+          
+          <div id="companySearchResults" style="flex:1; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; min-height:180px; max-height:360px; padding:8px;">
+            <div style="text-align:center; color:#888; padding:30px 10px; font-size:14px;">会社名を入力して検索ボタンを押してください</div>
+          </div>
+        </div>
       </div>
       <div class="field">
         <label>部署名</label>
@@ -1050,6 +1074,136 @@ async function lookupInvoiceNumber() {
     }
   }
 } 
+// ==========================================
+// 会社名からインボイス番号・住所を逆引き検索
+// ==========================================
+function openCompanySearchModal() {
+  const currentName = document.getElementById("customerCompany").value.trim();
+  const modal = document.getElementById("companySearchModal");
+  const input = document.getElementById("searchCompanyNameInput");
+  
+  if (modal) modal.style.display = "flex";
+  if (input) {
+    input.value = currentName;
+    if (currentName) {
+      executeCompanySearch();
+    }
+    input.focus();
+  }
+}
+
+function closeCompanySearchModal() {
+  const modal = document.getElementById("companySearchModal");
+  if (modal) modal.style.display = "none";
+}
+
+async function executeCompanySearch() {
+  const query = document.getElementById("searchCompanyNameInput").value.trim();
+  const statusEl = document.getElementById("companySearchStatus");
+  const resultsEl = document.getElementById("companySearchResults");
+
+  if (!query) {
+    alert("検索する会社名を入力してください。");
+    return;
+  }
+
+  statusEl.textContent = `「${query}」の法人番号・インボイス情報を照会中...`;
+  resultsEl.innerHTML = '<div style="text-align:center; padding:30px; color:#0284c7;">🔍 国税庁・公開データを検索しています...</div>';
+
+  const apiKey = localStorage.getItem("311banchi_gemini_key") || "";
+
+  // Gemini AI を使って国税庁公表の正確な法人名・インボイス番号（T+13桁）・本店所在地をリストアップ
+  if (!apiKey) {
+    statusEl.innerHTML = `<span style="color:#c53030;">⚠️ AI APIキーが設定されていません。上部の「AIアシスタント設定」にキーを保存してください。</span>`;
+    resultsEl.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">APIキーを入力すると高精度な逆引き検索が利用可能になります。</div>';
+    return;
+  }
+
+  const prompt = `あなたは日本の法人情報・国税庁適格請求書発行事業者公表情報の照会アシスタントです。
+検索クエリ「${query}」に一致または類似する日本の実在法人（適格請求書発行事業者）の候補を最大5件特定してください。
+
+【出力要件】
+必ず以下のJSON配列形式のみで出力してください。Markdownコードブロック以外の余計な解説文は一切出力しないでください。
+[
+  {
+    "company": "正式な商号（株式会社や合同会社を含む）",
+    "invoiceNo": "Tから始まる13桁のインボイス登録番号（法人の場合はT+法人番号13桁）",
+    "zip": "郵便番号（例: 〒100-0001）",
+    "address": "本店所在地（都道府県・市区町村・番地）"
+  }
+]
+インボイス番号が公表されていない・不明な場合は invoiceNo を ""（空文字）にしてください。`;
+
+  try {
+    const targetModel = "gemini-2.5-flash";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+    });
+
+    if (!res.ok) throw new Error("API通信エラー");
+    const data = await res.json();
+    let reply = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
+
+    // JSONブロックの抽出
+    reply = reply.replace(/```json/g, "").replace(/```/g, "").trim();
+    const list = JSON.parse(reply);
+
+    if (!Array.isArray(list) || list.length === 0) {
+      statusEl.textContent = "該当する法人情報が見つかりませんでした。";
+      resultsEl.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">該当なし。会社名をより正確に入力して再試行してください。</div>';
+      return;
+    }
+
+    statusEl.textContent = `${list.length}件の候補が見つかりました。「取込」を押すと宛先欄へ反映されます。`;
+    resultsEl.innerHTML = list.map((item, idx) => {
+      const invBadge = item.invoiceNo 
+        ? `<span style="font-family:monospace; background:#e0e7ff; color:#1e40af; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:12px;">${escapeHtml(item.invoiceNo)}</span>`
+        : `<span style="color:#94a3b8; font-size:12px;">番号未登録 / 不明</span>`;
+
+      return `
+        <div style="border-bottom:1px solid #eee; padding:10px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+          <div style="flex:1;">
+            <div style="font-weight:bold; font-size:15px; margin-bottom:3px; color:#111;">${escapeHtml(item.company)}</div>
+            <div style="font-size:13px; color:#555; margin-bottom:4px;">📍 ${escapeHtml(item.zip || "")} ${escapeHtml(item.address || "-")}</div>
+            <div>${invBadge}</div>
+          </div>
+          <div>
+            <button type="button" class="btn-main" style="padding:6px 14px; font-size:13px; font-weight:bold;" onclick='applyCompanySearchResult(${JSON.stringify(item)})'>取込</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+  } catch (err) {
+    console.error("検索エラー:", err);
+    statusEl.textContent = "照会中にエラーが発生しました。";
+    resultsEl.innerHTML = `<div style="text-align:center; padding:20px; color:#c53030;">検索に失敗しました: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+// 候補一覧から選んだデータを入力フォームへ自動反映
+function applyCompanySearchResult(item) {
+  if (!item) return;
+
+  document.getElementById("customerCompany").value = item.company || "";
+  if (item.zip) {
+    document.getElementById("customerZip").value = item.zip;
+  }
+  if (item.address) {
+    document.getElementById("customerAddress").value = item.address;
+  }
+  if (item.invoiceNo) {
+    document.getElementById("customerInvoiceNo").value = item.invoiceNo;
+  }
+
+  updatePreview();
+  closeCompanySearchModal();
+  alert(`「${item.company}」の情報を反映しました！\nインボイス番号: ${item.invoiceNo || "なし"}\n内容をご確認の上、必要に応じて取引先マスタへ保存してください。`);
+}
+  
 function formatInvoiceNumber(input) {
   let val = input.value.trim().toUpperCase();
   val = val.replace(/[Ａ-Ｚａ-ｚ０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
