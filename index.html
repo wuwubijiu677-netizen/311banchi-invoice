@@ -1108,60 +1108,78 @@ async function executeCompanySearch() {
   }
 
   statusEl.textContent = `「${query}」の法人番号・インボイス情報を照会中...`;
-  resultsEl.innerHTML = '<div style="text-align:center; padding:30px; color:#0284c7;">🔍 国税庁・公開データを検索しています...</div>';
+  resultsEl.innerHTML = '<div style="text-align:center; padding:30px; color:#0284c7;">🔍 データを検索しています...</div>';
 
   const apiKey = localStorage.getItem("311banchi_gemini_key") || "";
 
-  // Gemini AI を使って国税庁公表の正確な法人名・インボイス番号（T+13桁）・本店所在地をリストアップ
   if (!apiKey) {
     statusEl.innerHTML = `<span style="color:#c53030;">⚠️ AI APIキーが設定されていません。上部の「AIアシスタント設定」にキーを保存してください。</span>`;
-    resultsEl.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">APIキーを入力すると高精度な逆引き検索が利用可能になります。</div>';
+    resultsEl.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">APIキーを入力すると逆引き検索が利用可能になります。</div>';
     return;
   }
 
-  const prompt = `あなたは日本の法人情報・国税庁適格請求書発行事業者公表情報の照会アシスタントです。
-検索クエリ「${query}」に一致または類似する日本の実在法人（適格請求書発行事業者）の候補を最大5件特定してください。
+  const prompt = `日本の実在法人「${query}」について、国税庁適格請求書発行事業者公表情報および登記情報をもとに検索してください。
+一致または有力な候補を最大5件挙げてください。
 
-【出力要件】
-必ず以下のJSON配列形式のみで出力してください。Markdownコードブロック以外の余計な解説文は一切出力しないでください。
+必ず以下のJSON配列のみを出力してください（解説やMarkdown記法\`\`\`jsonは不要です）。
 [
   {
     "company": "正式な商号（株式会社や合同会社を含む）",
-    "invoiceNo": "Tから始まる13桁のインボイス登録番号（法人の場合はT+法人番号13桁）",
+    "invoiceNo": "Tから始まる13桁の登録番号（不明なら空文字）",
     "zip": "郵便番号（例: 〒100-0001）",
-    "address": "本店所在地（都道府県・市区町村・番地）"
+    "address": "本店所在地"
   }
-]
-インボイス番号が公表されていない・不明な場合は invoiceNo を ""（空文字）にしてください。`;
+]`;
 
   try {
     const targetModel = "gemini-2.5-flash";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
+    
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }]
+      })
     });
 
-    if (!res.ok) throw new Error("API通信エラー");
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      const detailedMsg = errJson.error?.message || `HTTPステータス: ${res.status} (${res.statusText})`;
+      throw new Error(detailedMsg);
+    }
+
     const data = await res.json();
     let reply = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
 
-    // JSONブロックの抽出
-    reply = reply.replace(/```json/g, "").replace(/```/g, "").trim();
-    const list = JSON.parse(reply);
+    reply = reply.replace(/```json/gi, "").replace(/```/g, "").trim();
+
+    const jsonStart = reply.indexOf("[");
+    const jsonEnd = reply.lastIndexOf("]");
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+      reply = reply.substring(jsonStart, jsonEnd + 1);
+    }
+
+    let list = [];
+    try {
+      list = JSON.parse(reply);
+    } catch (e) {
+      throw new Error("AIの返答を解析できませんでした。もう一度お試しください。");
+    }
 
     if (!Array.isArray(list) || list.length === 0) {
       statusEl.textContent = "該当する法人情報が見つかりませんでした。";
-      resultsEl.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">該当なし。会社名をより正確に入力して再試行してください。</div>';
+      resultsEl.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">該当なし。会社名をより詳しく（株式会社などを付けて）入力してください。</div>';
       return;
     }
 
     statusEl.textContent = `${list.length}件の候補が見つかりました。「取込」を押すと宛先欄へ反映されます。`;
-    resultsEl.innerHTML = list.map((item, idx) => {
+    resultsEl.innerHTML = list.map((item) => {
       const invBadge = item.invoiceNo 
         ? `<span style="font-family:monospace; background:#e0e7ff; color:#1e40af; padding:2px 6px; border-radius:4px; font-weight:bold; font-size:12px;">${escapeHtml(item.invoiceNo)}</span>`
         : `<span style="color:#94a3b8; font-size:12px;">番号未登録 / 不明</span>`;
+
+      const itemAttr = escapeHtml(JSON.stringify(item));
 
       return `
         <div style="border-bottom:1px solid #eee; padding:10px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
@@ -1171,7 +1189,7 @@ async function executeCompanySearch() {
             <div>${invBadge}</div>
           </div>
           <div>
-            <button type="button" class="btn-main" style="padding:6px 14px; font-size:13px; font-weight:bold;" onclick='applyCompanySearchResult(${JSON.stringify(item)})'>取込</button>
+            <button type="button" class="btn-main" style="padding:6px 14px; font-size:13px; font-weight:bold;" onclick='applyCompanySearchResult(${itemAttr})'>取込</button>
           </div>
         </div>
       `;
@@ -1180,10 +1198,9 @@ async function executeCompanySearch() {
   } catch (err) {
     console.error("検索エラー:", err);
     statusEl.textContent = "照会中にエラーが発生しました。";
-    resultsEl.innerHTML = `<div style="text-align:center; padding:20px; color:#c53030;">検索に失敗しました: ${escapeHtml(err.message)}</div>`;
+    resultsEl.innerHTML = `<div style="text-align:center; padding:20px; color:#c53030;"><strong>エラー詳細:</strong><br>${escapeHtml(err.message)}</div>`;
   }
 }
-
 // 候補一覧から選んだデータを入力フォームへ自動反映
 function applyCompanySearchResult(item) {
   if (!item) return;
