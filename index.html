@@ -558,7 +558,43 @@ tr.row-won {
   margin: 0;
   font-size: 9px;
 }
-
+/* リアルタイムAIバッジ */
+.ai-realtime-badge {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+  background: #ffffff;
+  border: 1.5px solid #0284c7;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+  border-radius: 30px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.ai-realtime-badge:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+}
+.ai-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+.ai-status-dot.checking { background: #38bdf8; animation: pulse 1s infinite; }
+.ai-status-dot.ok { background: #22c55e; }
+.ai-status-dot.warn { background: #f59e0b; }
+@keyframes pulse {
+  0% { transform: scale(0.9); opacity: 0.7; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.7; }
+}
 @page {
   size: A4 landscape;
   margin: 0;
@@ -768,7 +804,11 @@ tr.row-won {
   </div>
 
 </div>
-
+<!-- リアルタイムAIバッジ -->
+<div id="realtimeAiBadge" class="ai-realtime-badge" style="display:none;" onclick="scrollToAiReport()">
+  <span id="aiStatusDot" class="ai-status-dot"></span>
+  <span id="aiStatusText">AI待機中</span>
+</div>
 <!-- プレビュー枠 -->
 <div class="panel preview-panel-wrap" style="margin:20px;">
   <h2>帳票プレビュー</h2>
@@ -1792,6 +1832,128 @@ function updatePreview() {
 }
 
 // AIミスチェック実行処理
+// ==========================================
+// 追っかけAI（リアルタイム診断）
+// ==========================================
+let aiCheckTimer = null;
+let lastCheckedPayloadStr = "";
+
+// ユーザーの入力・変更を検知してタイマーをセット
+function triggerRealtimeAICheck() {
+  const apiKey = localStorage.getItem("311banchi_gemini_key") || "";
+  if (!apiKey) return;
+
+  const badge = document.getElementById("realtimeAiBadge");
+  const dot = document.getElementById("aiStatusDot");
+  const text = document.getElementById("aiStatusText");
+  if (badge) badge.style.display = "flex";
+
+  // 入力中は「入力中...」にして待機
+  if (dot && text) {
+    dot.className = "ai-status-dot";
+    text.textContent = "入力中...";
+  }
+
+  // 手が止まってから1.8秒後に自動実行
+  clearTimeout(aiCheckTimer);
+  aiCheckTimer = setTimeout(() => {
+    runRealtimeAICheck();
+  }, 1800);
+}
+
+async function runRealtimeAICheck() {
+  const apiKey = localStorage.getItem("311banchi_gemini_key") || "";
+  if (!apiKey) return;
+
+  const company = document.getElementById("customerCompany").value.trim();
+  const subject = document.getElementById("subject").value.trim();
+  // 会社名も案件名もまだ入っていない初期状態ならスキップ
+  if (!company && !subject) return;
+
+  const dot = document.getElementById("aiStatusDot");
+  const text = document.getElementById("aiStatusText");
+  const aiBox = document.getElementById("aiBox");
+  const aiResult = document.getElementById("aiResult");
+
+  const payloadData = {
+    帳票種別: docType === "quote" ? "見積書" : "請求書",
+    取引先会社名: company,
+    部署: document.getElementById("customerDept").value.trim(),
+    担当者: document.getElementById("customerPerson").value.trim(),
+    案件名: subject,
+    郵便番号: document.getElementById("customerZip").value.trim(),
+    住所: document.getElementById("customerAddress").value.trim(),
+    建物名: document.getElementById("customerBuilding").value.trim(),
+    発行日: document.getElementById("docDate").value,
+    期日: document.getElementById("deadline").value,
+    運搬ルート: routes,
+    明細: items,
+    合計金額: getTotals().total
+  };
+
+  const currentPayloadStr = JSON.stringify(payloadData);
+  if (currentPayloadStr === lastCheckedPayloadStr) return; // 前回のチェックから変更がなければスキップ
+
+  if (dot && text) {
+    dot.className = "ai-status-dot checking";
+    text.textContent = "AI解析中...";
+  }
+
+  const prompt = `あなたは物流・運送業（合同会社311BANCHI）のリアルタイム校閲アシスタントです。
+以下の入力データを確認し、実務的な観点から「即座に直すべき致命的な不備・明らかな誤記」がないか簡潔に診断してください。
+
+【データ】
+${currentPayloadStr}
+
+【業界・業務ルール（※以下は正常ですので絶対に問題視しないでください）】
+・搬入先や復路などの時間は、直行・着後順次納品が多いため「空欄」で正常です。
+・消費税は10%自動加算です。
+・宵積み、翌日配送は通常の業務フローです。
+
+【判定基準】
+・住所の番地抜け、誤字、日付の前後関係の矛盾（搬入日が搬出日より過去など）、単価0円放置など。
+・問題がなければ「OK」の2文字のみ返してください。
+・問題がある場合は、修正すべき要点を1〜2行で短く教えてください。`;
+
+  try {
+    const targetModel = "gemini-2.5-flash";
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+    });
+
+    if (!res.ok) throw new Error("API通信エラー");
+    const data = await res.json();
+    const reply = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
+    lastCheckedPayloadStr = currentPayloadStr;
+
+    if (reply.includes("OK") && reply.length <= 10) {
+      dot.className = "ai-status-dot ok";
+      text.textContent = "AIチェック: 問題なし";
+      if (aiBox) aiBox.style.display = "none";
+    } else {
+      dot.className = "ai-status-dot warn";
+      text.textContent = "⚠️ 確認項目あり (クリック)";
+      if (aiBox && aiResult) {
+        aiBox.style.display = "block";
+        aiResult.textContent = `【リアルタイム検知】\n${reply}`;
+      }
+    }
+  } catch (err) {
+    dot.className = "ai-status-dot";
+    text.textContent = "AI待機中";
+  }
+}
+
+function scrollToAiReport() {
+  const aiBox = document.getElementById("aiBox");
+  if (aiBox && aiBox.style.display !== "none") {
+    aiBox.scrollIntoView({ behavior: "smooth" });
+  }
+}
+  
 async function runAICheck() {
   const apiKey = document.getElementById("geminiApiKey").value.trim();
   if (!apiKey) {
@@ -2433,7 +2595,10 @@ function resetForm() {
   updatePreview();
 }
 
-document.addEventListener("input", () => { updatePreview(); });
+document.addEventListener("input", () => {
+  updatePreview();
+  triggerRealtimeAICheck();
+});
 document.getElementById("docDate").addEventListener("change", () => {
   if (docType === "invoice" && autoInvoiceDeadline) setInvoiceDeadlineFromDocDate();
   updatePreview();
