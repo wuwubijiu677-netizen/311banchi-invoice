@@ -841,11 +841,6 @@ tr.row-won {
 
 </div>
 
-<!-- リアルタイムAIバッジ -->
-<div id="realtimeAiBadge" class="ai-realtime-badge" style="display:none;" onclick="scrollToAiReport()">
-  <span id="aiStatusDot" class="ai-status-dot"></span>
-  <span id="aiStatusText">AI待機中</span>
-</div>
 
 <!-- プレビュー枠 -->
 <div class="panel preview-panel-wrap" style="margin:20px;">
@@ -2876,8 +2871,7 @@ function resetForm() {
 
 document.addEventListener("input", () => {
   updatePreview();
-  triggerRealtimeAICheck();
-});
+  });
 document.getElementById("docDate").addEventListener("change", () => {
   if (docType === "invoice" && autoInvoiceDeadline) setInvoiceDeadlineFromDocDate();
   updatePreview();
