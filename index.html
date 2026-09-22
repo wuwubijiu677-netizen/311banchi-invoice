@@ -729,9 +729,12 @@ tr.row-won {
         <label>建物名・階数</label>
         <input id="customerBuilding">
       </div>
-      <div class="field">
+     <div class="field">
         <label>適格請求書登録番号（インボイス番号）</label>
-        <input id="customerInvoiceNo" placeholder="T1234567890123" maxlength="14" oninput="formatInvoiceNumber(this)">
+        <div style="display:flex; gap:8px;">
+          <input id="customerInvoiceNo" placeholder="T1234567890123" maxlength="14" oninput="formatInvoiceNumber(this)" style="flex:1;">
+          <button type="button" class="btn-sub" style="font-weight:bold; white-space:nowrap; padding:9px 12px;" onclick="lookupInvoiceNumber()">🔍 照会・取込</button>
+        </div>
       </div>
     </div>
     <div class="row-3">
@@ -964,6 +967,89 @@ function saveClientMasterList(list) {
 }
 
 // インボイス登録番号の入力フォーマット整形
+ // ==========================================
+// インボイス番号の国税庁Web照会＆自動取り込み
+// ==========================================
+async function lookupInvoiceNumber() {
+  const invInput = document.getElementById("customerInvoiceNo");
+  let val = invInput.value.trim().toUpperCase();
+  
+  // Tが付いていなければ付与
+  if (val && !val.startsWith("T")) {
+    const digits = val.replace(/\D/g, "");
+    if (digits) val = "T" + digits;
+    invInput.value = val;
+  }
+
+  if (!/^T\d{13}$/.test(val)) {
+    alert("正しいインボイス番号（T + 13桁の数字）を入力してください。");
+    return;
+  }
+
+  const btn = event?.target;
+  const originalText = btn ? btn.textContent : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "照会中...";
+  }
+
+  try {
+    // 国税庁公表サイトのWebデータを取得（オープンプロキシ経由）
+    const targetUrl = `https://www.invoice-kohyo.nta.go.jp/houjin-bangou-shousai.html?id=${val.slice(1)}`;
+    const apiUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+    
+    const res = await fetch(apiUrl);
+    if (!res.ok) throw new Error("通信に失敗しました");
+    const json = await res.json();
+    const htmlText = json.contents;
+
+    // HTMLパース
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlText, "text/html");
+
+    // 商号・名称と所在地を抽出
+    // 国税庁公表ページの構造から取得
+    let name = "";
+    let address = "";
+
+    const dtElements = doc.querySelectorAll("dt");
+    dtElements.forEach(dt => {
+      const text = dt.textContent.trim();
+      const dd = dt.nextElementSibling;
+      if (!dd) return;
+      if (text.includes("商号又は名称") || text.includes("氏名")) {
+        name = dd.textContent.trim().replace(/\s+/g, " ");
+      } else if (text.includes("本店又は主たる事務所の所在地") || text.includes("国内の居所")) {
+        address = dd.textContent.trim().replace(/\s+/g, " ");
+      }
+    });
+
+    if (!name) {
+      // 該当なし、または個人の屋号非公表などの場合
+      alert(`インボイス番号「${val}」の法人情報を自動取得できませんでした。\n国税庁サイト上で登録があるか直接確認してください。\nURL: ${targetUrl}`);
+      return;
+    }
+
+    // フォームへ自動反映
+    if (confirm(`【国税庁の登録情報が見つかりました】\n\n会社名: ${name}\n所在地: ${address}\n\nこの内容を宛先欄に取り込みますか？`)) {
+      document.getElementById("customerCompany").value = name;
+      if (address) {
+        document.getElementById("customerAddress").value = address;
+      }
+      updatePreview();
+      alert("取引先情報を反映しました！\n必要に応じて郵便番号や担当者名を入力し、「マスタに登録」を行ってください。");
+    }
+
+  } catch (err) {
+    console.error("照会エラー:", err);
+    alert(`照会処理中にエラーが発生しました。\n番号をご確認いただくか、国税庁公表サイトで直接お調べください。`);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  }
+} 
 function formatInvoiceNumber(input) {
   let val = input.value.trim().toUpperCase();
   val = val.replace(/[Ａ-Ｚａ-ｚ０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
