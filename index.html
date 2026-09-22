@@ -558,6 +558,7 @@ tr.row-won {
   margin: 0;
   font-size: 9px;
 }
+
 /* リアルタイムAIバッジ */
 .ai-realtime-badge {
   position: fixed;
@@ -595,6 +596,7 @@ tr.row-won {
   50% { transform: scale(1.2); opacity: 1; }
   100% { transform: scale(0.9); opacity: 0.7; }
 }
+
 @page {
   size: A4 landscape;
   margin: 0;
@@ -615,6 +617,8 @@ tr.row-won {
   .actions,
   #invoiceLedgerPanel,
   #quoteLedgerPanel,
+  #clientMasterPanel,
+  .ai-realtime-badge,
   .preview-panel-wrap h2 {
     display: none !important;
   }
@@ -808,11 +812,13 @@ tr.row-won {
   </div>
 
 </div>
+
 <!-- リアルタイムAIバッジ -->
 <div id="realtimeAiBadge" class="ai-realtime-badge" style="display:none;" onclick="scrollToAiReport()">
   <span id="aiStatusDot" class="ai-status-dot"></span>
   <span id="aiStatusText">AI待機中</span>
 </div>
+
 <!-- プレビュー枠 -->
 <div class="panel preview-panel-wrap" style="margin:20px;">
   <h2>帳票プレビュー</h2>
@@ -822,6 +828,7 @@ tr.row-won {
     </div>
   </div>
 </div>
+
 <!-- 見積管理台帳 -->
 <div class="panel" id="quoteLedgerPanel" style="margin:20px;">
   <h2>📋 見積管理台帳</h2>
@@ -861,13 +868,13 @@ tr.row-won {
     <table class="items-table">
       <thead>
         <tr>
-          <th style="width:220px;">会社名</th>
-          <th style="width:140px;">部署名</th>
-          <th style="width:120px;">ご担当者</th>
+          <th style="width:200px;">会社名</th>
+          <th style="width:120px;">部署名</th>
+          <th style="width:110px;">ご担当者</th>
           <th>住所・所在地</th>
           <th style="width:140px;">登録番号</th>
-          <th style="width:100px;">入力反映</th>
-          <th style="width:80px;">操作</th>
+          <th style="width:90px;">入力反映</th>
+          <th style="width:70px;">操作</th>
         </tr>
       </thead>
       <tbody id="clientMasterTableBody"></tbody>
@@ -939,119 +946,8 @@ const initialLastNumbers = {
   quote: 333,
   invoice: 408
 };
+
 // ==========================================
-// 取引先マスタ管理
-// ==========================================
-function getClientMaster() {
-  try {
-    const saved = JSON.parse(localStorage.getItem("311banchi_client_master") || "[]");
-    return Array.isArray(saved) ? saved : [];
-  } catch (e) {
-    return [];
-  }
-}
-
-function saveClientMasterList(list) {
-  localStorage.setItem("311banchi_client_master", JSON.stringify(list));
-}
-
-// ドロップダウンの選択肢を更新
-function renderClientMasterSelect() {
-  const select = document.getElementById("clientMasterSelect");
-  if (!select) return;
-  const list = getClientMaster();
-  
-  select.innerHTML = '<option value="">-- 保存済みの取引先を選択 --</option>';
-  list.forEach((client, idx) => {
-    const opt = document.createElement("option");
-    opt.value = idx;
-    opt.textContent = client.company + (client.person ? ` (${client.person}様)` : "");
-    select.appendChild(opt);
-  });
-}
-
-// 選択した取引先をフォームへ自動入力
-function applyClientMaster(idxStr) {
-  if (idxStr === "") return;
-  const list = getClientMaster();
-  const c = list[Number(idxStr)];
-  if (!c) return;
-
-  document.getElementById("customerCompany").value = c.company || "";
-  document.getElementById("customerDept").value = c.dept || "";
-  document.getElementById("customerPerson").value = c.person || "";
-  document.getElementById("customerZip").value = c.zip || "";
-  document.getElementById("customerAddress").value = c.address || "";
-  document.getElementById("customerBuilding").value = c.building || "";
-  
-  updatePreview();
-}
-
-// 現在の宛先フォームの内容をマスタに登録・更新
-function saveCurrentAsClient() {
-  const company = document.getElementById("customerCompany").value.trim();
-  if (!company) {
-    alert("会社名を入力してください。");
-    return;
-  }
-
-  const clientData = {
-    company: company,
-    dept: document.getElementById("customerDept").value.trim(),
-    person: document.getElementById("customerPerson").value.trim(),
-    zip: document.getElementById("customerZip").value.trim(),
-    address: document.getElementById("customerAddress").value.trim(),
-    building: document.getElementById("customerBuilding").value.trim()
-  };
-
-  const list = getClientMaster();
-  const existingIdx = list.findIndex(c => c.company === company);
-
-  if (existingIdx >= 0) {
-    if (confirm(`「${company}」は既に登録されています。最新の入力内容で上書き更新しますか？`)) {
-      list[existingIdx] = clientData;
-      saveClientMasterList(list);
-      renderClientMasterSelect();
-      document.getElementById("clientMasterSelect").value = existingIdx;
-      alert("取引先マスタを更新しました！");
-    }
-  } else {
-    list.push(clientData);
-    list.sort((a, b) => a.company.localeCompare(b.company, "ja"));
-    saveClientMasterList(list);
-    renderClientMasterSelect();
-    const newIdx = list.findIndex(c => c.company === company);
-    if (newIdx >= 0) document.getElementById("clientMasterSelect").value = newIdx;
-    alert(`「${company}」を取引先マスタに登録しました！次回から選択するだけで自動入力されます。`);
-  }
-}
-
-// 選択中の取引先を削除
-function deleteSelectedClient() {
-  const select = document.getElementById("clientMasterSelect");
-  const idx = select.value;
-  if (idx === "") {
-    alert("削除したい取引先をドロップダウンから選択してください。");
-    return;
-  }
-
-  const list = getClientMaster();
-  const target = list[Number(idx)];
-  if (!target) return;
-
-  if (!confirm(`取引先マスタから「${target.company}」を削除しますか？`)) return;
-
-  list.splice(Number(idx), 1);
-  saveClientMasterList(list);
-  renderClientMasterSelect();
-  select.value = "";
-  alert("取引先マスタから削除しました。");
-}
-
-  // ==========================================
-// 取引先マスタ ＆ 取引先管理台帳
-  // ==========================================
-  // ==========================================
 // 取引先マスタ ＆ 取引先管理台帳（インボイス番号対応版）
 // ==========================================
 function getClientMaster() {
@@ -1067,10 +963,9 @@ function saveClientMasterList(list) {
   localStorage.setItem("311banchi_client_master", JSON.stringify(list));
 }
 
-// インボイス登録番号の入力フォーマット整形（先頭に自動でTを付与、英大文字・半角数字化）
+// インボイス登録番号の入力フォーマット整形
 function formatInvoiceNumber(input) {
   let val = input.value.trim().toUpperCase();
-  // 全角英数を半角に変換
   val = val.replace(/[Ａ-Ｚａ-ｚ０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
   
   if (val.length > 0 && !val.startsWith("T")) {
@@ -1238,15 +1133,14 @@ function deleteClientByIndex(index) {
   showClientMasterTable();
   alert("取引先マスタから削除しました。");
 }
+
+// ==========================================
 // 郵便番号からの住所自動入力
 // ==========================================
 async function autoFillAddress(val) {
-  // 数字のみを抽出
   const rawDigits = val.replace(/\D/g, "");
 
-  // 7桁入力された時点で自動検索を実行
   if (rawDigits.length === 7) {
-    // 表示を「〒000-0000」の形式に自動整形
     document.getElementById("customerZip").value = `〒${rawDigits.slice(0, 3)}-${rawDigits.slice(3)}`;
 
     try {
@@ -1255,10 +1149,7 @@ async function autoFillAddress(val) {
       
       if (data && data.results && data.results.length > 0) {
         const item = data.results[0];
-        // 都道府県 + 市区町村 + 町域名 を結合
         const fullAddr = `${item.address1}${item.address2}${item.address3}`;
-        
-        // 住所欄に自動セット
         document.getElementById("customerAddress").value = fullAddr;
         updatePreview();
       }
@@ -1267,164 +1158,7 @@ async function autoFillAddress(val) {
     }
   }
 }
-// ==========================================
-function getClientMaster() {
-  try {
-    const saved = JSON.parse(localStorage.getItem("311banchi_client_master") || "[]");
-    return Array.isArray(saved) ? saved : [];
-  } catch (e) {
-    return [];
-  }
-}
 
-function saveClientMasterList(list) {
-  localStorage.setItem("311banchi_client_master", JSON.stringify(list));
-}
-
-// ドロップダウンの選択肢を更新
-function renderClientMasterSelect() {
-  const select = document.getElementById("clientMasterSelect");
-  if (!select) return;
-  const list = getClientMaster();
-  
-  select.innerHTML = '<option value="">-- 保存済みの取引先を選択 --</option>';
-  list.forEach((client, idx) => {
-    const opt = document.createElement("option");
-    opt.value = idx;
-    opt.textContent = client.company + (client.person ? ` (${client.person}様)` : "");
-    select.appendChild(opt);
-  });
-}
-
-// 選択した取引先をフォームへ自動入力
-function applyClientMaster(idxStr) {
-  if (idxStr === "" || idxStr === undefined) return;
-  const list = getClientMaster();
-  const c = list[Number(idxStr)];
-  if (!c) return;
-
-  document.getElementById("customerCompany").value = c.company || "";
-  document.getElementById("customerDept").value = c.dept || "";
-  document.getElementById("customerPerson").value = c.person || "";
-  document.getElementById("customerZip").value = c.zip || "";
-  document.getElementById("customerAddress").value = c.address || "";
-  document.getElementById("customerBuilding").value = c.building || "";
-  
-  const select = document.getElementById("clientMasterSelect");
-  if (select) select.value = idxStr;
-  
-  updatePreview();
-}
-
-// 現在の宛先フォームの内容をマスタに登録・更新
-function saveCurrentAsClient() {
-  const company = document.getElementById("customerCompany").value.trim();
-  if (!company) {
-    alert("会社名を入力してください。");
-    return;
-  }
-
-  const clientData = {
-    company: company,
-    dept: document.getElementById("customerDept").value.trim(),
-    person: document.getElementById("customerPerson").value.trim(),
-    zip: document.getElementById("customerZip").value.trim(),
-    address: document.getElementById("customerAddress").value.trim(),
-    building: document.getElementById("customerBuilding").value.trim()
-  };
-
-  const list = getClientMaster();
-  const existingIdx = list.findIndex(c => c.company === company);
-
-  if (existingIdx >= 0) {
-    if (confirm(`「${company}」は既に登録されています。最新の入力内容で上書き更新しますか？`)) {
-      list[existingIdx] = clientData;
-      saveClientMasterList(list);
-      renderClientMasterSelect();
-      showClientMasterTable();
-      document.getElementById("clientMasterSelect").value = existingIdx;
-      alert("取引先マスタを更新しました！");
-    }
-  } else {
-    list.push(clientData);
-    list.sort((a, b) => a.company.localeCompare(b.company, "ja"));
-    saveClientMasterList(list);
-    renderClientMasterSelect();
-    showClientMasterTable();
-    const newIdx = list.findIndex(c => c.company === company);
-    if (newIdx >= 0) document.getElementById("clientMasterSelect").value = newIdx;
-    alert(`「${company}」を取引先マスタに登録しました！`);
-  }
-}
-
-// ドロップダウン選択中の取引先を削除
-function deleteSelectedClient() {
-  const select = document.getElementById("clientMasterSelect");
-  const idx = select.value;
-  if (idx === "") {
-    alert("削除したい取引先をドロップダウンから選択してください。");
-    return;
-  }
-
-  const list = getClientMaster();
-  const target = list[Number(idx)];
-  if (!target) return;
-
-  if (!confirm(`取引先マスタから「${target.company}」を削除しますか？`)) return;
-
-  list.splice(Number(idx), 1);
-  saveClientMasterList(list);
-  renderClientMasterSelect();
-  showClientMasterTable();
-  select.value = "";
-  alert("取引先マスタから削除しました。");
-}
-
-// 取引先管理台帳（一覧表）の描画処理
-function showClientMasterTable() {
-  const tbody = document.getElementById("clientMasterTableBody");
-  if (!tbody) return;
-  const list = getClientMaster();
-
-  if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;">登録済みの取引先はありません。「現在の宛先を新規登録・更新」から登録できます。</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = list.map((c, i) => {
-    const addressFull = [c.zip, c.address, c.building].filter(Boolean).join(" ");
-    return `
-      <tr>
-        <td><strong>${escapeHtml(c.company)}</strong></td>
-        <td>${escapeHtml(c.dept || "-")}</td>
-        <td>${escapeHtml(c.person ? c.person + " 様" : "-")}</td>
-        <td style="font-size:13px;">${escapeHtml(addressFull || "-")}</td>
-        <td style="text-align:center;">
-          <button class="btn-sub" style="font-weight:bold; padding:6px 10px;" onclick="applyClientMaster(${i}); window.scrollTo({top:0, behavior:'smooth'});">⬆ 反映</button>
-        </td>
-        <td style="text-align:center;">
-          <button class="btn-danger" style="padding:6px 10px;" onclick="deleteClientByIndex(${i})">削除</button>
-        </td>
-      </tr>
-    `;
-  }).join("");
-}
-
-// 台帳の一覧から直接削除する処理
-function deleteClientByIndex(index) {
-  const list = getClientMaster();
-  const target = list[index];
-  if (!target) return;
-
-  if (!confirm(`取引先「${target.company}」をマスタから削除しますか？`)) return;
-
-  list.splice(index, 1);
-  saveClientMasterList(list);
-  renderClientMasterSelect();
-  showClientMasterTable();
-  alert("取引先マスタから削除しました。");
-}
-  
 // APIキー管理
 function saveApiKey() {
   const key = document.getElementById("geminiApiKey").value.trim();
@@ -2023,14 +1757,12 @@ function updatePreview() {
   `;
 }
 
-// AIミスチェック実行処理
 // ==========================================
 // 追っかけAI（リアルタイム診断）
 // ==========================================
 let aiCheckTimer = null;
 let lastCheckedPayloadStr = "";
 
-// ユーザーの入力・変更を検知してタイマーをセット
 function triggerRealtimeAICheck() {
   const apiKey = localStorage.getItem("311banchi_gemini_key") || "";
   if (!apiKey) return;
@@ -2040,13 +1772,11 @@ function triggerRealtimeAICheck() {
   const text = document.getElementById("aiStatusText");
   if (badge) badge.style.display = "flex";
 
-  // 入力中は「入力中...」にして待機
   if (dot && text) {
     dot.className = "ai-status-dot";
     text.textContent = "入力中...";
   }
 
-  // 手が止まってから1.8秒後に自動実行
   clearTimeout(aiCheckTimer);
   aiCheckTimer = setTimeout(() => {
     runRealtimeAICheck();
@@ -2059,7 +1789,6 @@ async function runRealtimeAICheck() {
 
   const company = document.getElementById("customerCompany").value.trim();
   const subject = document.getElementById("subject").value.trim();
-  // 会社名も案件名もまだ入っていない初期状態ならスキップ
   if (!company && !subject) return;
 
   const dot = document.getElementById("aiStatusDot");
@@ -2084,7 +1813,7 @@ async function runRealtimeAICheck() {
   };
 
   const currentPayloadStr = JSON.stringify(payloadData);
-  if (currentPayloadStr === lastCheckedPayloadStr) return; // 前回のチェックから変更がなければスキップ
+  if (currentPayloadStr === lastCheckedPayloadStr) return;
 
   if (dot && text) {
     dot.className = "ai-status-dot checking";
@@ -2145,7 +1874,8 @@ function scrollToAiReport() {
     aiBox.scrollIntoView({ behavior: "smooth" });
   }
 }
-  
+
+// AIミスチェック手動実行
 async function runAICheck() {
   const apiKey = document.getElementById("geminiApiKey").value.trim();
   if (!apiKey) {
@@ -2197,14 +1927,12 @@ ${JSON.stringify(payloadData, null, 2)}
 修正すべき点があれば箇条書きで簡潔にアドバイスし、問題がなければ「実務上問題は見当たりませんでした」と伝えてください。`;
 
   try {
-    const targetModel = "gemini-3.6-flash";
+    const targetModel = "gemini-2.5-flash";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
-      })
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
     });
 
     if (!res.ok) {
@@ -2251,6 +1979,7 @@ function registerCurrentQuote() {
   const zip = document.getElementById("customerZip").value.trim();
   const address = document.getElementById("customerAddress").value.trim();
   const building = document.getElementById("customerBuilding").value.trim();
+  const invoiceNo = document.getElementById("customerInvoiceNo").value.trim();
   const deadline = document.getElementById("deadline").value;
   const cargo = document.getElementById("cargo").value;
   const notes = document.getElementById("notes").value;
@@ -2272,6 +2001,7 @@ function registerCurrentQuote() {
     zip,
     address,
     building,
+    invoiceNo,
     deadline,
     cargo,
     notes,
@@ -2303,7 +2033,7 @@ function showQuoteLedger() {
   const ledger = getQuoteLedger();
 
   if (!ledger.length) {
-    body.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:20px;">まだ見積書が登録されていません。</td></tr>`;
+    body.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:20px;">まだ見積書が登録されていません。</td></tr>`;
     return;
   }
 
@@ -2326,14 +2056,14 @@ function showQuoteLedger() {
             <option value="受注" ${row.status === "受注" ? "selected" : ""}>受注</option>
             <option value="失注" ${row.status === "失注" ? "selected" : ""}>失注</option>
           </select>
-       </td>
-      <td>
-        <button class="btn-sub" style="font-weight:bold; padding:6px 10px;" onclick="loadQuoteForRevision(${index})">✏️ 再見積</button>
-      </td>
-      <td>
-        <button class="btn-convert" onclick="convertQuoteToInvoice(${index})">⚡ 請求書へ変換</button>
-      </td>
-        <td>
+        </td>
+        <td style="text-align:center;">
+          <button class="btn-sub" style="font-weight:bold; padding:6px 10px;" onclick="loadQuoteForRevision(${index})">✏️ 再見積</button>
+        </td>
+        <td style="text-align:center;">
+          <button class="btn-convert" onclick="convertQuoteToInvoice(${index})">⚡ 請求書へ変換</button>
+        </td>
+        <td style="text-align:center;">
           <button class="btn-danger" onclick="deleteQuoteLedger(${index})">削除</button>
         </td>
       </tr>
@@ -2366,7 +2096,6 @@ function convertQuoteToInvoice(index) {
 
   if (!confirm(`見積「${q.subject}」のデータをもとに請求書を作成しますか？`)) return;
 
-  // フォームへのデータ反映
   document.getElementById("customerCompany").value = q.customer || "";
   document.getElementById("customerDept").value = q.dept || "";
   document.getElementById("customerPerson").value = q.person || "";
@@ -2374,6 +2103,7 @@ function convertQuoteToInvoice(index) {
   document.getElementById("customerZip").value = q.zip || "";
   document.getElementById("customerAddress").value = q.address || "";
   document.getElementById("customerBuilding").value = q.building || "";
+  document.getElementById("customerInvoiceNo").value = q.invoiceNo || "";
   document.getElementById("cargo").value = q.cargo || "イベント備品";
   document.getElementById("notes").value = q.notes || "";
 
@@ -2389,10 +2119,8 @@ function convertQuoteToInvoice(index) {
   renderRoutes();
   renderItems();
 
-  // 請求書に切り替え＆自動採番
   setDocType("invoice");
 
-  // 見積ステータスを受注に更新
   q.status = "受注";
   saveQuoteLedger(ledger);
   showQuoteLedger();
@@ -2400,6 +2128,7 @@ function convertQuoteToInvoice(index) {
   window.scrollTo({ top: 0, behavior: "smooth" });
   alert(`見積データを引き継ぎ、請求書を作成しました！\n請求書番号: ${document.getElementById("docNumber").value}\n内容をご確認の上、PDF保存・印刷または台帳登録を行ってください。`);
 }
+
 // 見積を呼び起こして枝番（-1, -2）を付けて再見積を作成する処理
 function loadQuoteForRevision(index) {
   const ledger = getQuoteLedger();
@@ -2408,7 +2137,6 @@ function loadQuoteForRevision(index) {
 
   if (!confirm(`見積「${q.subject}」を呼び起こして再見積を作成しますか？`)) return;
 
-  // 1. フォームへのデータ呼び起こし
   document.getElementById("customerCompany").value = q.customer || "";
   document.getElementById("customerDept").value = q.dept || "";
   document.getElementById("customerPerson").value = q.person || "";
@@ -2416,31 +2144,28 @@ function loadQuoteForRevision(index) {
   document.getElementById("customerZip").value = q.zip || "";
   document.getElementById("customerAddress").value = q.address || "";
   document.getElementById("customerBuilding").value = q.building || "";
+  document.getElementById("customerInvoiceNo").value = q.invoiceNo || "";
   document.getElementById("cargo").value = q.cargo || "イベント備品";
   document.getElementById("notes").value = q.notes || "";
   document.getElementById("deadline").value = q.deadline || "";
 
-  // 日付を今日に更新
   const today = new Date();
   const yyyy = today.getFullYear();
   const mm = String(today.getMonth() + 1).padStart(2, "0");
   const dd = String(today.getDate()).padStart(2, "0");
   document.getElementById("docDate").value = `${yyyy}-${mm}-${dd}`;
 
-  // ルート・明細の展開
   routes = q.routes ? JSON.parse(JSON.stringify(q.routes)) : [];
   items = q.items ? JSON.parse(JSON.stringify(q.items)) : [];
   renderRoutes();
   renderItems();
 
-  // 見積書モードに切り替え
   docType = "quote";
   document.getElementById("quoteBtn").classList.add("active");
   document.getElementById("invoiceBtn").classList.remove("active");
   document.getElementById("dateLabel").textContent = "見積日";
   document.getElementById("deadlineLabel").textContent = "有効期限";
 
-  // 2. 枝番の自動計算（元が Q-0000000333 なら Q-0000000333-1、次は -2）
   const baseNumber = q.quoteNumber.split("-").slice(0, 2).join("-");
   
   let maxBranch = 0;
@@ -2464,6 +2189,7 @@ function loadQuoteForRevision(index) {
   window.scrollTo({ top: 0, behavior: "smooth" });
   alert(`見積データを呼び出しました！\n改訂版の見積番号: ${newQuoteNumber}\n内容を修正して「現在の見積書を登録」を行ってください。`);
 }
+
 // ==========================================
 // 請求管理台帳
 // ==========================================
@@ -2515,7 +2241,7 @@ function registerCurrentInvoice() {
     record.paymentStatus = ledger[existingIndex].paymentStatus || "未入金";
     ledger[existingIndex] = record;
     saveInvoiceLedger(ledger);
-   
+    
     showInvoiceLedger();
     showQuoteLedger();
     alert("請求管理台帳を更新しました。");
@@ -2640,16 +2366,18 @@ function deleteInvoiceLedger(index) {
 function exportBackupJSON() {
   const invoiceLedger = getInvoiceLedger();
   const quoteLedger = getQuoteLedger();
+  const clientMaster = getClientMaster();
   const quoteNum = localStorage.getItem("311banchi_quote_number") || initialLastNumbers.quote;
   const invoiceNum = localStorage.getItem("311banchi_invoice_number") || initialLastNumbers.invoice;
 
   const backupData = {
-    version: "2.0",
+    version: "2.1",
     exportDate: new Date().toISOString(),
     quoteNumber: quoteNum,
     invoiceNumber: invoiceNum,
     quoteLedger: quoteLedger,
-    ledger: invoiceLedger
+    ledger: invoiceLedger,
+    clientMaster: clientMaster
   };
 
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
@@ -2674,7 +2402,7 @@ function importBackupJSON(event) {
         throw new Error("バックアップファイルの形式が正しくありません。");
       }
 
-      if (!confirm(`バックアップファイルを読み込みますか？\n（請求データ ${data.ledger.length} 件、見積データ ${(data.quoteLedger || []).length} 件が復元されます）`)) {
+      if (!confirm(`バックアップファイルを読み込みますか？\n（請求データ ${data.ledger.length} 件、見積データ ${(data.quoteLedger || []).length} 件、取引先 ${(data.clientMaster || []).length} 件が復元されます）`)) {
         event.target.value = "";
         return;
       }
@@ -2683,11 +2411,16 @@ function importBackupJSON(event) {
       if (data.quoteLedger && Array.isArray(data.quoteLedger)) {
         saveQuoteLedger(data.quoteLedger);
       }
+      if (data.clientMaster && Array.isArray(data.clientMaster)) {
+        saveClientMasterList(data.clientMaster);
+      }
       if (data.quoteNumber) localStorage.setItem("311banchi_quote_number", String(data.quoteNumber));
       if (data.invoiceNumber) localStorage.setItem("311banchi_invoice_number", String(data.invoiceNumber));
 
       showInvoiceLedger();
       showQuoteLedger();
+      renderClientMasterSelect();
+      showClientMasterTable();
       setNextDocumentNumber();
       alert("バックアップから正常に復元しました！");
     } catch (err) {
@@ -2815,9 +2548,8 @@ addRoute("往路");
 updatePreview();
 showQuoteLedger();
 showInvoiceLedger();
-renderClientMasterSelect(); 
 renderClientMasterSelect();
-showClientMasterTable();  
+showClientMasterTable();
 </script>
 
 </body>
