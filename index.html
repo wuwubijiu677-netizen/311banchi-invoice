@@ -1105,7 +1105,7 @@ async function executeCompanySearch() {
 ]`;
 
   try {
-    const targetModel = "gemini-1.5-flash";
+    const targetModel = "gemini-3.8-flash";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
     
     const res = await fetch(url, {
@@ -2026,7 +2026,7 @@ ${JSON.stringify(payloadData, null, 2)}
 修正すべき点があれば箇条書きで簡潔にアドバイスし、問題がなければ「実務上問題は見当たりませんでした」と伝えてください。`;
 
   try {
-    const targetModel = "gemini-1.5-flash";
+    const targetModel = "gemini-3.8-flash";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
     const res = await fetch(url, {
       method: "POST",
