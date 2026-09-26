@@ -1104,11 +1104,43 @@ async function executeCompanySearch() {
   }
 ]`;
 
+
+// Gemini API共通設定・自動リトライ
+const GEMINI_MODEL = "gemini-3.5-flash-lite";
+
+async function fetchGeminiWithRetry(url, options, maxRetries = 3) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, options);
+      if (res.ok) return res;
+
+      const errJson = await res.json().catch(() => ({}));
+      const message = errJson.error?.message || res.statusText || `HTTP ${res.status}`;
+      const retryable = [429, 500, 502, 503, 504].includes(res.status);
+
+      if (!retryable || attempt === maxRetries) {
+        throw new Error(`HTTP ${res.status}: ${message}`);
+      }
+    } catch (err) {
+      if (attempt === maxRetries) throw err;
+      // 一時的な混雑・通信エラーは待ってから再試行
+      const delay = Math.min(2000 * (2 ** attempt), 8000);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      continue;
+    }
+
+    const delay = Math.min(2000 * (2 ** attempt), 8000);
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
+
+  throw new Error("Gemini APIへの接続に失敗しました。");
+}
+
   try {
-    const targetModel = "gemini-3.8-flash";
+    const targetModel = GEMINI_MODEL;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
     
-    const res = await fetch(url, {
+    const res = await fetchGeminiWithRetry(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1116,11 +1148,6 @@ async function executeCompanySearch() {
         tools: [{ googleSearch: {} }]
       })
     });
-
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson.error?.message || `HTTP ${res.status}`);
-    }
 
     const data = await res.json();
     let reply = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
@@ -2026,18 +2053,13 @@ ${JSON.stringify(payloadData, null, 2)}
 修正すべき点があれば箇条書きで簡潔にアドバイスし、問題がなければ「実務上問題は見当たりませんでした」と伝えてください。`;
 
   try {
-    const targetModel = "gemini-3.8-flash";
+    const targetModel = GEMINI_MODEL;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
-    const res = await fetch(url, {
+    const res = await fetchGeminiWithRetry(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
     });
-
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(`HTTP ${res.status}: ${errJson.error?.message || res.statusText}`);
-    }
 
     const data = await res.json();
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
