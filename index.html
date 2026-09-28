@@ -893,7 +893,7 @@ tr.row-won {
   </div>
 
   <div class="button-row">
-    <button class="btn-main" onclick="registerCurrentInvoice()">現在の請求書を登録</button>
+    <button class="btn-main" onclick="registerCurrentInvoice()">請求書登録 → freee用ファイル自動作成</button>
     <button class="btn-sub" onclick="showInvoiceLedger()">一覧を更新</button>
     <button class="btn-success" onclick="exportBackupJSON()">💾 バックアップ保存 (JSON)</button>
     <button class="btn-sub" onclick="document.getElementById('restoreFileInput').click()">📂 バックアップ読込</button>
@@ -2325,11 +2325,111 @@ function saveInvoiceLedger(ledger) {
   localStorage.setItem("311banchi_invoice_ledger", JSON.stringify(ledger));
 }
 
+function validateInvoiceForFreeeData(record) {
+  const errors = [];
+
+  if (!record.invoiceNumber) errors.push("請求書番号が未入力です。");
+  if (!record.invoiceDate) errors.push("請求日が未入力です。");
+  if (!record.customer) errors.push("取引先が未入力です。");
+  if (!record.subject) errors.push("案件名が未入力です。");
+  if (!record.deadline) errors.push("入金期日が未入力です。");
+  if (!(Number(record.amount) > 0)) errors.push("請求額が0円です。");
+
+  if (!items.length) {
+    errors.push("明細が1件もありません。");
+  } else {
+    items.forEach((item, index) => {
+      if (!String(item.description || "").trim()) {
+        errors.push(`明細${index + 1}の摘要が未入力です。`);
+      }
+      if (!(Number(item.qty) > 0)) {
+        errors.push(`明細${index + 1}の数量が0です。`);
+      }
+      if (!(Number(item.unit) > 0)) {
+        errors.push(`明細${index + 1}の単価が0円です。`);
+      }
+    });
+  }
+
+  return errors;
+}
+
+function autoCreateFreeeExcelForInvoice(invoiceNumber) {
+  const ledger = getInvoiceLedger();
+  const target = ledger.find(r => r.invoiceNumber === invoiceNumber);
+  if (!target) return false;
+
+  const errors = validateInvoiceForFreeeData(target);
+  if (errors.length) {
+    alert("freee取込前チェックでエラーが見つかりました。\n\n・" + errors.join("\n・") + "\n\n台帳への登録は行いましたが、freee用ファイルは作成していません。");
+    return false;
+  }
+
+  const totalAmount = Number(target.amount || 0);
+  const taxAmount = Math.floor(totalAmount - (totalAmount / 1.10));
+
+  const headers = [
+    "収支区分",
+    "管理番号",
+    "発生日",
+    "決済期日",
+    "取引先",
+    "勘定科目",
+    "税区分",
+    "金額",
+    "税計算区分",
+    "税額",
+    "備考",
+    "品目",
+    "決済状況"
+  ];
+
+  const row = [
+    "収入",
+    target.invoiceNumber,
+    target.invoiceDate,
+    target.deadline || "",
+    target.customer || "",
+    "売上高",
+    "課税売上10%",
+    totalAmount,
+    "税込",
+    taxAmount,
+    target.subject || "",
+    "運搬業務",
+    target.paymentStatus === "入金済" ? "完了" : "未決済"
+  ];
+
+  const worksheet = XLSX.utils.aoa_to_sheet([headers, row]);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "取引データ");
+
+  const safeNumber = String(target.invoiceNumber).replace(/[^0-9A-Za-z_-]/g, "_");
+  const fileName = `freee売上インポート_${safeNumber}.xlsx`;
+  XLSX.writeFile(workbook, fileName);
+
+  const index = ledger.findIndex(x => x.invoiceNumber === invoiceNumber);
+  if (index >= 0) {
+    ledger[index].freeeStatus = "登録済";
+    saveInvoiceLedger(ledger);
+    showInvoiceLedger();
+  }
+
+  alert(
+    "請求書登録・freee用ファイル作成まで自動で完了しました。\n\n" +
+    `請求書番号：${target.invoiceNumber}\n` +
+    `請求額：${yen(totalAmount)}\n\n` +
+    "次にfreeeへこのファイルを取り込み、freee上で内容をご確認ください。"
+  );
+  return true;
+}
+
 function registerCurrentInvoice() {
   if (docType !== "invoice") {
     alert("請求書に切り替えてから登録してください。");
     return;
   }
+
   const invoiceNumber = document.getElementById("docNumber").value.trim();
   const invoiceDate = document.getElementById("docDate").value;
   const customer = document.getElementById("customerCompany").value.trim();
@@ -2343,6 +2443,17 @@ function registerCurrentInvoice() {
   }
 
   const ledger = getInvoiceLedger();
+  const existingIndex = ledger.findIndex(x => x.invoiceNumber === invoiceNumber);
+  const existing = existingIndex >= 0 ? ledger[existingIndex] : null;
+
+  const changedAfterRegistered = existing && existing.freeeStatus === "登録済" && (
+    existing.invoiceDate !== invoiceDate ||
+    existing.customer !== customer ||
+    existing.subject !== subject ||
+    Number(existing.amount) !== Number(amount) ||
+    existing.deadline !== deadline
+  );
+
   const record = {
     invoiceNumber,
     invoiceDate,
@@ -2350,27 +2461,21 @@ function registerCurrentInvoice() {
     subject,
     amount,
     deadline,
-    freeeStatus: "未登録",
-    paymentStatus: "未入金"
+    freeeStatus: changedAfterRegistered ? "未登録" : (existing?.freeeStatus || "未登録"),
+    paymentStatus: existing?.paymentStatus || "未入金"
   };
 
-  const existingIndex = ledger.findIndex(x => x.invoiceNumber === invoiceNumber);
   if (existingIndex >= 0) {
-    record.freeeStatus = ledger[existingIndex].freeeStatus || "未登録";
-    record.paymentStatus = ledger[existingIndex].paymentStatus || "未入金";
     ledger[existingIndex] = record;
-    saveInvoiceLedger(ledger);
-    
-    showInvoiceLedger();
-    showQuoteLedger();
-    alert("請求管理台帳を更新しました。");
-    return;
+  } else {
+    ledger.unshift(record);
   }
 
-  ledger.unshift(record);
   saveInvoiceLedger(ledger);
   showInvoiceLedger();
-  alert("請求管理台帳に登録しました。");
+  showQuoteLedger();
+
+  autoCreateFreeeExcelForInvoice(invoiceNumber);
 }
 
 function showInvoiceLedger() {
@@ -2437,6 +2542,7 @@ function showInvoiceLedger() {
         <td>
           <select onchange="updateInvoiceLedgerStatus(${index}, 'freeeStatus', this.value)">
             <option value="未登録" ${row.freeeStatus === "未登録" ? "selected" : ""}>未登録</option>
+            <option value="取込待ち" ${row.freeeStatus === "取込待ち" ? "selected" : ""}>取込待ち</option>
             <option value="登録済" ${row.freeeStatus === "登録済" ? "selected" : ""}>登録済</option>
           </select>
         </td>
@@ -2645,16 +2751,16 @@ function exportFreeeExcel() {
   // .xlsxファイルとして直接保存
   XLSX.writeFile(workbook, fileName);
 
-  if (confirm(`freee用エクセルファイルを出力しました！（対象: ${targets.length}件）\n台帳のfreeeステータスを「登録済」に更新しますか？`)) {
-    targets.forEach(target => {
-      const idx = ledger.findIndex(x => x.invoiceNumber === target.invoiceNumber);
-      if (idx >= 0) {
-        ledger[idx].freeeStatus = "登録済";
-      }
-    });
-    saveInvoiceLedger(ledger);
-    showInvoiceLedger();
-  }
+  targets.forEach(target => {
+    const idx = ledger.findIndex(x => x.invoiceNumber === target.invoiceNumber);
+    if (idx >= 0 && ledger[idx].freeeStatus !== "登録済") {
+      ledger[idx].freeeStatus = "登録済";
+    }
+  });
+  saveInvoiceLedger(ledger);
+  showInvoiceLedger();
+
+  alert(`freee用エクセルファイルを出力しました！（対象: ${targets.length}件）\n\n台帳のfreeeステータスを「登録済」に更新しました。\n次にfreeeへこのファイルを取り込み、freee上で内容をご確認ください。`);
 }
 
 // 通常の請求管理台帳CSVエクスポート
