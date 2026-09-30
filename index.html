@@ -1607,7 +1607,7 @@ function renderStops(routeIndex) {
         </div>
         <div class="field">
           <label>名称</label>
-          <input value="${escapeHtml(stop.name)}" placeholder="会社・会場名など" onchange="updateStop(${routeIndex},${stopIndex},'name',this.value)">
+          <input value="${escapeHtml(stop.name)}" placeholder="会社・会場名など" onchange="updateStop(${routeIndex},${stopIndex},'address',this.value)">
         </div>
         <div class="field">
           <label>住所</label>
@@ -2807,7 +2807,14 @@ function printAndAdvance() {
   document.title = `【${subject}】${customer}_${typeName}_${docNumber}`;
 
   const { numberKey, nextNumber } = getNumberInfo();
-  const enteredNumber = Number((document.getElementById("docNumber").value || "").replace(/\D/g, ""));
+  
+  // 変更箇所：ハイフンで分割し、メインの番号部分だけを抽出して枝番を無視する
+  const docNumValue = document.getElementById("docNumber").value || "";
+  const parts = docNumValue.split("-");
+  // Q-00001-1 なら parts[1] を、プレフィックスなしで手入力された場合は parts[0] を使う
+  const mainNumPart = parts.length > 1 ? parts[1] : parts[0]; 
+  const enteredNumber = Number(mainNumPart.replace(/\D/g, ""));
+  
   const issuedNumber = Math.max(enteredNumber || nextNumber, initialLastNumbers[docType]);
 
   localStorage.setItem(numberKey, String(issuedNumber));
