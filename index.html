@@ -1607,7 +1607,7 @@ function renderStops(routeIndex) {
         </div>
         <div class="field">
           <label>名称</label>
-          <input value="${escapeHtml(stop.name)}" placeholder="会社・会場名など" onchange="updateStop(${routeIndex},${stopIndex},'address',this.value)">
+          <input value="${escapeHtml(stop.name)}" placeholder="会社・会場名など" onchange="updateStop(${routeIndex},${stopIndex},'name',this.value)">
         </div>
         <div class="field">
           <label>住所</label>
@@ -2043,6 +2043,10 @@ ${JSON.stringify(payloadData, null, 2)}
 ・搬入先や復路などの「時間」は、積込後の直行・流れ作業（着後順次納品）が基本となるため、時間が空欄であっても未記入や漏れとして指摘しないでください。
 ・合計金額は「明細の小計 ＋ 消費税10%」で自動算出されています。小計と合計金額の差額が消費税分（10%）であれば不一致として指摘しないでください。
 ・宵積み、一時預かりによる翌日配送などは通常の業務フローです。
+
+【重要：日付や日数の照合ルール】
+・摘要欄等に「9/1, 9/2...」のように運行日が列挙されている場合、感覚や推測で「〇日分ある」と決めつけないでください。
+・AIは文字のカウントで数え間違いを起こしやすいため、日数の不一致を指摘する場合は、必ず列挙されている日付を1日ずつ正確にすべて書き出して検算してください。確証が持てない場合は日数の不一致を軽率に指摘しないでください。
 
 【重点チェック観点】
 1. 住所の町名や番地抜け、誤字などの明らかな表記不備（例：区のあとに町名がなく番地になっている等）
@@ -2808,10 +2812,9 @@ function printAndAdvance() {
 
   const { numberKey, nextNumber } = getNumberInfo();
   
-  // 変更箇所：ハイフンで分割し、メインの番号部分だけを抽出して枝番を無視する
+  // ハイフンで分割し、メインの番号部分だけを抽出して枝番を無視する
   const docNumValue = document.getElementById("docNumber").value || "";
   const parts = docNumValue.split("-");
-  // Q-00001-1 なら parts[1] を、プレフィックスなしで手入力された場合は parts[0] を使う
   const mainNumPart = parts.length > 1 ? parts[1] : parts[0]; 
   const enteredNumber = Number(mainNumPart.replace(/\D/g, ""));
   
