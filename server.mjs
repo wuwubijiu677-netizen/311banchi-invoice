@@ -156,10 +156,41 @@ async function createDeal(record) {
   await saveState(state);
   return state.deals[String(record.invoiceNumber)];
 }
-async function syncDeals() {
+async function syncDeals(invoiceNumbers = []) {
   const state = await readState();
   if (!state.settings?.companyId) throw new Error('freee設定を保存してください。');
-  const entries = Object.values(state.deals || {});
+  state.deals ||= {};
+  const requested = [...new Set(invoiceNumbers.map(value => String(value || '').trim()).filter(value => /^[-A-Za-z0-9_]{1,100}$/.test(value)))];
+  const missingNumbers = requested.filter(number => !state.deals[number]);
+  if (missingNumbers.length) {
+    const matches = new Map();
+    let offset = 0;
+    while (offset < 10000 && missingNumbers.some(number => !matches.has(number))) {
+      const query = new URLSearchParams({ company_id: state.settings.companyId, limit: '100', offset: String(offset) });
+      const result = await freeeApi(`https://api.freee.co.jp/api/1/deals?${query}`);
+      const page = result.deals || [];
+      for (const item of page) {
+        const deal = item.deal || item;
+        const ref = String(deal.ref_number || '');
+        if (!missingNumbers.includes(ref)) continue;
+        const previous = matches.get(ref);
+        if (previous === undefined) matches.set(ref, deal);
+        else matches.set(ref, null);
+      }
+      if (page.length < 100) break;
+      offset += page.length;
+    }
+    for (const number of missingNumbers) {
+      const deal = matches.get(number);
+      if (!deal?.id) continue;
+      state.deals[number] = {
+        id: Number(deal.id), invoiceNumber: number,
+        paymentStatus: deal.status === 'settled' ? '入金済' : '未入金',
+        updatedAt: new Date().toISOString()
+      };
+    }
+  }
+  const entries = Object.values(state.deals);
   for (const entry of entries) {
     try {
       const query = new URLSearchParams({ company_id: state.settings.companyId });
@@ -269,7 +300,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && url.pathname === '/api/sync') {
       if (!validCsrf(req)) return send(res, 403, { error: 'この画面からの操作として確認できませんでした。アプリを再読み込みしてください。' });
-      return send(res, 200, await syncDeals());
+      const values = await bodyJson(req);
+      return send(res, 200, await syncDeals(Array.isArray(values.invoiceNumbers) ? values.invoiceNumbers : []));
     }
     if (req.method === 'GET' && url.pathname === '/api/sync') return send(res, 200, await readState());
     if (req.method === 'GET' && url.pathname === '/api/freee-sync-backup') {
