@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: 311banchi-invoice
+    runtime: node
+    plan: 0.5c-512mb
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeployTrigger: 'off'
+    disk:
+      name: invoice-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: DATA_DIR
+        value: /var/data
+      - key: APP_PASSWORD
+        sync: false
+      - key: FREEE_CLIENT_ID
+        sync: false
+      - key: FREEE_CLIENT_SECRET
+        sync: false

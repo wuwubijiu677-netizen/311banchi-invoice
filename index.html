@@ -893,13 +893,34 @@ tr.row-won {
   </div>
 
   <div class="button-row">
-    <button class="btn-main" onclick="registerCurrentInvoice()">請求書登録 → freee用ファイル自動作成</button>
+    <button class="btn-main" onclick="registerCurrentInvoice()">請求書登録 → freee会計へ連携</button>
+    <button class="btn-sub" onclick="connectFreee()">freeeに接続</button>
+    <button class="btn-sub" onclick="syncFreeeStatuses(true)">freeeの入金状況を今すぐ同期</button>
+    <span id="freeeConnectionStatus" style="align-self:center;font-size:13px;color:#555;">freee連携サーバーを確認中…</span>
     <button class="btn-sub" onclick="showInvoiceLedger()">一覧を更新</button>
     <button class="btn-success" onclick="exportBackupJSON()">💾 バックアップ保存 (JSON)</button>
     <button class="btn-sub" onclick="document.getElementById('restoreFileInput').click()">📂 バックアップ読込</button>
     <button class="btn-sub" onclick="exportCSV()">📊 台帳CSVエクスポート</button>
     <button class="btn-convert" style="background:#16a34a; font-weight:bold;" onclick="exportFreeeExcel()">📗 freee用エクセル(.xlsx)出力</button>
     <input type="file" id="restoreFileInput" style="display:none;" accept=".json" onchange="importBackupJSON(event)">
+  </div>
+
+  <div style="margin-top:16px;padding:16px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;">
+    <strong>freee連携の初期設定</strong>
+    <p style="margin:6px 0 12px;font-size:13px;color:#555;">最初に一度だけ、連携する事業所・勘定科目・税区分を選びます。</p>
+    <div class="button-row" style="align-items:end;">
+      <div class="field" style="flex:1;min-width:180px;margin:0;"><label>事業所</label><select id="freeeCompanySelect" onchange="loadFreeeMasters()"><option value="">freeeから読み込み</option></select></div>
+      <div class="field" style="flex:1;min-width:180px;margin:0;"><label>勘定科目</label><select id="freeeAccountSelect"><option value="">事業所を選択してください</option></select></div>
+      <div class="field" style="flex:1;min-width:180px;margin:0;"><label>税区分</label><select id="freeeTaxSelect"><option value="">事業所を選択してください</option></select></div>
+      <button class="btn-sub" type="button" onclick="loadFreeeMasters()">選択肢を読み込む</button>
+      <button class="btn-success" type="button" onclick="saveFreeeSettings()">設定を保存</button>
+    </div>
+    <div class="button-row" style="margin-top:10px;">
+      <button class="btn-sub" type="button" onclick="exportFreeeSyncBackup()">🔐 freee同期情報を保存</button>
+      <button class="btn-sub" type="button" onclick="document.getElementById('freeeSyncBackupInput').click()">📂 freee同期情報を読み込み</button>
+      <input type="file" id="freeeSyncBackupInput" style="display:none;" accept=".json,application/json" onchange="importFreeeSyncBackup(event)">
+    </div>
+    <p style="margin:6px 0 0;font-size:12px;color:#555;">クラウドへ移すときに使います。請求台帳のバックアップとは別のファイルです。freeeの秘密トークンは含みません。</p>
   </div>
 
   <div class="table-wrap" style="margin-top:15px;">
@@ -923,6 +944,20 @@ tr.row-won {
 </div>
 
 <script>
+let freeeCsrfToken = "";
+
+async function freeeApiFetch(path, options = {}) {
+  if (!freeeCsrfToken) {
+    const sessionResponse = await fetch("/api/session", { cache: "no-store" });
+    const session = await sessionResponse.json();
+    if (!sessionResponse.ok || !session.csrfToken) throw new Error("freee連携サーバーを再読み込みしてください。");
+    freeeCsrfToken = session.csrfToken;
+  }
+  const headers = new Headers(options.headers || {});
+  headers.set("X-CSRF-Token", freeeCsrfToken);
+  return fetch(path, { ...options, headers });
+}
+
 // Gemini API共通設定・自動リトライ
 // ※この設定はすべてのGemini関連関数から参照できるよう、script直下に置いています。
 const GEMINI_MODEL = "gemini-3.5-flash-lite";
@@ -2339,10 +2374,11 @@ function validateInvoiceForFreeeData(record) {
   if (!record.deadline) errors.push("入金期日が未入力です。");
   if (!(Number(record.amount) > 0)) errors.push("請求額が0円です。");
 
-  if (!items.length) {
+  const invoiceItems = Array.isArray(record.items) ? record.items : items;
+  if (!invoiceItems.length) {
     errors.push("明細が1件もありません。");
   } else {
-    items.forEach((item, index) => {
+    invoiceItems.forEach((item, index) => {
       if (!String(item.description || "").trim()) {
         errors.push(`明細${index + 1}の摘要が未入力です。`);
       }
@@ -2358,77 +2394,7 @@ function validateInvoiceForFreeeData(record) {
   return errors;
 }
 
-function autoCreateFreeeExcelForInvoice(invoiceNumber) {
-  const ledger = getInvoiceLedger();
-  const target = ledger.find(r => r.invoiceNumber === invoiceNumber);
-  if (!target) return false;
-
-  const errors = validateInvoiceForFreeeData(target);
-  if (errors.length) {
-    alert("freee取込前チェックでエラーが見つかりました。\n\n・" + errors.join("\n・") + "\n\n台帳への登録は行いましたが、freee用ファイルは作成していません。");
-    return false;
-  }
-
-  const totalAmount = Number(target.amount || 0);
-  const taxAmount = Math.floor(totalAmount - (totalAmount / 1.10));
-
-  const headers = [
-    "収支区分",
-    "管理番号",
-    "発生日",
-    "決済期日",
-    "取引先",
-    "勘定科目",
-    "税区分",
-    "金額",
-    "税計算区分",
-    "税額",
-    "備考",
-    "品目",
-    "決済状況"
-  ];
-
-  const row = [
-    "収入",
-    target.invoiceNumber,
-    target.invoiceDate,
-    target.deadline || "",
-    target.customer || "",
-    "売上高",
-    "課税売上10%",
-    totalAmount,
-    "税込",
-    taxAmount,
-    target.subject || "",
-    "運搬業務",
-    target.paymentStatus === "入金済" ? "完了" : "未決済"
-  ];
-
-  const worksheet = XLSX.utils.aoa_to_sheet([headers, row]);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "取引データ");
-
-  const safeNumber = String(target.invoiceNumber).replace(/[^0-9A-Za-z_-]/g, "_");
-  const fileName = `freee売上インポート_${safeNumber}.xlsx`;
-  XLSX.writeFile(workbook, fileName);
-
-  const index = ledger.findIndex(x => x.invoiceNumber === invoiceNumber);
-  if (index >= 0) {
-    ledger[index].freeeStatus = "登録済";
-    saveInvoiceLedger(ledger);
-    showInvoiceLedger();
-  }
-
-  alert(
-    "請求書登録・freee用ファイル作成まで自動で完了しました。\n\n" +
-    `請求書番号：${target.invoiceNumber}\n` +
-    `請求額：${yen(totalAmount)}\n\n` +
-    "次にfreeeへこのファイルを取り込み、freee上で内容をご確認ください。"
-  );
-  return true;
-}
-
-function registerCurrentInvoice() {
+async function registerCurrentInvoice() {
   if (docType !== "invoice") {
     alert("請求書に切り替えてから登録してください。");
     return;
@@ -2450,13 +2416,19 @@ function registerCurrentInvoice() {
   const existingIndex = ledger.findIndex(x => x.invoiceNumber === invoiceNumber);
   const existing = existingIndex >= 0 ? ledger[existingIndex] : null;
 
-  const changedAfterRegistered = existing && existing.freeeStatus === "登録済" && (
+  const invoiceItems = items.map(item => ({ description: item.description, qty: Number(item.qty), unit: Number(item.unit) }));
+  const changedAfterRegistered = existing?.freeeDealId && (
     existing.invoiceDate !== invoiceDate ||
     existing.customer !== customer ||
     existing.subject !== subject ||
     Number(existing.amount) !== Number(amount) ||
-    existing.deadline !== deadline
+    existing.deadline !== deadline ||
+    JSON.stringify(existing.items || []) !== JSON.stringify(invoiceItems)
   );
+  if (changedAfterRegistered) {
+    alert("この請求書番号はfreeeに登録済みです。二重登録や内容の食い違いを防ぐため、登録済み請求書はここから変更できません。変更が必要な場合は、freee側の取引を確認し、新しい請求書番号で登録してください。");
+    return;
+  }
 
   const record = {
     invoiceNumber,
@@ -2465,8 +2437,11 @@ function registerCurrentInvoice() {
     subject,
     amount,
     deadline,
-    freeeStatus: changedAfterRegistered ? "未登録" : (existing?.freeeStatus || "未登録"),
-    paymentStatus: existing?.paymentStatus || "未入金"
+    items: invoiceItems,
+    customerInvoiceNo: document.getElementById("customerInvoiceNo").value.trim(),
+    freeeStatus: existing?.freeeStatus || "未登録",
+    paymentStatus: existing?.paymentStatus || "未入金",
+    freeeDealId: existing?.freeeDealId || null
   };
 
   if (existingIndex >= 0) {
@@ -2479,7 +2454,162 @@ function registerCurrentInvoice() {
   showInvoiceLedger();
   showQuoteLedger();
 
-  autoCreateFreeeExcelForInvoice(invoiceNumber);
+  const saved = getInvoiceLedger().find(x => x.invoiceNumber === invoiceNumber);
+  const errors = validateInvoiceForFreeeData(saved);
+  if (errors.length) {
+    alert("freee連携前に確認してください。\n\n・" + errors.join("\n・"));
+    return;
+  }
+  try {
+    const response = await freeeApiFetch("/api/create-deal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(saved) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "freeeへの登録に失敗しました。");
+    const latest = getInvoiceLedger();
+    const index = latest.findIndex(x => x.invoiceNumber === invoiceNumber);
+    if (index >= 0) {
+      latest[index].freeeDealId = result.id;
+      latest[index].freeeStatus = "登録済";
+      latest[index].paymentStatus = result.paymentStatus || "未入金";
+      saveInvoiceLedger(latest);
+      showInvoiceLedger();
+    }
+    alert(`freee会計へ登録しました。\n請求書番号: ${invoiceNumber}\n以後、freeeの入金状況を5分ごとに確認します。`);
+  } catch (error) {
+    alert("請求書はこの台帳に保存しましたが、freee連携は完了しませんでした。\n\n" + error.message);
+  }
+}
+
+async function connectFreee() {
+  try {
+    const statusResponse = await fetch("/api/status");
+    const status = await statusResponse.json();
+    if (status.missing?.length) {
+      alert("先にserverフォルダの .env を設定してください。\n不足項目: " + status.missing.join(", "));
+      return;
+    }
+    window.open("/auth/freee", "_blank", "noopener");
+  } catch {
+    alert("連携サーバーが起動していません。手順書の「サーバーを起動」を先に行ってください。");
+  }
+}
+
+async function loadFreeeMasters() {
+  const statusText = document.getElementById("freeeConnectionStatus");
+  try {
+    const statusResponse = await fetch("/api/status");
+    const status = await statusResponse.json();
+    if (!status.connected) throw new Error("先に「freeeに接続」を押してください。");
+    const savedResponse = await fetch("/api/sync");
+    const saved = await savedResponse.json();
+    const selectedCompany = document.getElementById("freeeCompanySelect").value || saved.settings?.companyId || "";
+    const url = selectedCompany ? `/api/masters?company_id=${encodeURIComponent(selectedCompany)}` : "/api/masters";
+    const response = await fetch(url);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "freeeから選択肢を読み込めませんでした。");
+    const companySelect = document.getElementById("freeeCompanySelect");
+    const accountSelect = document.getElementById("freeeAccountSelect");
+    const taxSelect = document.getElementById("freeeTaxSelect");
+    companySelect.innerHTML = `<option value="">事業所を選択</option>` + data.companies.map(c => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.display_name || c.name || c.id)}</option>`).join("");
+    if (selectedCompany) companySelect.value = selectedCompany;
+    if (data.accountItems.length) {
+      accountSelect.innerHTML = `<option value="">勘定科目を選択</option>` + data.accountItems.map(a => `<option value="${escapeHtml(a.id)}">${escapeHtml(a.name)}</option>`).join("");
+      const oldAccount = saved.settings?.accountItemId;
+      const sales = data.accountItems.find(a => a.name === "売上高");
+      accountSelect.value = oldAccount || sales?.id || "";
+    }
+    if (data.taxes.length) {
+      taxSelect.innerHTML = `<option value="">税区分を選択</option>` + data.taxes.map(t => `<option value="${escapeHtml(t.code)}">${escapeHtml(t.name || t.code)}</option>`).join("");
+      const oldTax = saved.settings?.taxCode;
+      const salesTax = data.taxes.find(t => String(t.name || "").includes("課税売上10%"));
+      taxSelect.value = oldTax || salesTax?.code || "";
+    }
+    if (statusText) statusText.textContent = "freeeから選択肢を読み込みました。勘定科目と税区分を確認してください。";
+  } catch (error) {
+    if (statusText) statusText.textContent = error.message;
+  }
+}
+
+async function saveFreeeSettings() {
+  const settings = {
+    companyId: document.getElementById("freeeCompanySelect").value,
+    accountItemId: document.getElementById("freeeAccountSelect").value,
+    taxCode: document.getElementById("freeeTaxSelect").value
+  };
+  try {
+    const response = await freeeApiFetch("/api/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "保存できませんでした。");
+    document.getElementById("freeeConnectionStatus").textContent = "freee設定を保存しました。";
+    alert("freee設定を保存しました。");
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function exportFreeeSyncBackup() {
+  try {
+    const response = await fetch("/api/freee-sync-backup", { cache: "no-store" });
+    if (!response.ok) throw new Error("freee連携サーバーから情報を保存できませんでした。");
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "311BANCHI_freee_sync_backup.json";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    alert("freee同期情報を保存しました。クラウド移行後に読み込みます。\nこのファイルにはfreeeの秘密トークンは含まれません。");
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function importFreeeSyncBackup(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try {
+    const backup = JSON.parse(await file.text());
+    const count = Object.keys(backup.deals || {}).length;
+    if (!confirm(`freee設定と請求書 ${count} 件の同期情報を読み込みますか？\nfreeeへの接続は、読み込み後に別途必要です。\nクラウド側に同期情報がある場合は上書きせず停止します。`)) return;
+    const response = await freeeApiFetch("/api/freee-sync-restore", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(backup) });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "freee同期情報を読み込めませんでした。");
+    alert(`freee設定と請求書 ${result.importedDeals} 件の同期情報を読み込みました。\nfreeeに接続後、入金状況を同期してください。`);
+    location.reload();
+  } catch (error) {
+    alert("読み込みエラー: " + error.message);
+  } finally {
+    event.target.value = "";
+  }
+}
+
+async function syncFreeeStatuses(showMessage = false) {
+  const statusText = document.getElementById("freeeConnectionStatus");
+  try {
+    const ledger = getInvoiceLedger();
+    const response = await freeeApiFetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ invoiceNumbers: ledger.map(row => row.invoiceNumber) }) });
+    const state = await response.json();
+    if (!response.ok) throw new Error(state.error || "同期に失敗しました。");
+    let changed = false;
+    for (const row of ledger) {
+      const remote = state.deals?.[String(row.invoiceNumber)];
+      if (!remote) continue;
+      row.freeeDealId = remote.id;
+      row.freeeStatus = "登録済";
+      if (remote.paymentStatus && row.paymentStatus !== remote.paymentStatus) {
+        row.paymentStatus = remote.paymentStatus;
+        changed = true;
+      }
+    }
+    if (changed) saveInvoiceLedger(ledger);
+    showInvoiceLedger();
+    if (statusText) statusText.textContent = `freee接続中・最終同期 ${new Date(state.lastSync).toLocaleTimeString("ja-JP")}`;
+    if (showMessage) alert("freeeの入金状況を同期しました。");
+  } catch (error) {
+    if (statusText) statusText.textContent = "freee同期待ち: " + error.message;
+    if (showMessage) alert(error.message);
+  }
 }
 
 function showInvoiceLedger() {
@@ -2757,14 +2887,14 @@ function exportFreeeExcel() {
 
   targets.forEach(target => {
     const idx = ledger.findIndex(x => x.invoiceNumber === target.invoiceNumber);
-    if (idx >= 0 && ledger[idx].freeeStatus !== "登録済") {
-      ledger[idx].freeeStatus = "登録済";
+    if (idx >= 0 && ledger[idx].freeeStatus === "未登録") {
+      ledger[idx].freeeStatus = "取込待ち";
     }
   });
   saveInvoiceLedger(ledger);
   showInvoiceLedger();
 
-  alert(`freee用エクセルファイルを出力しました！（対象: ${targets.length}件）\n\n台帳のfreeeステータスを「登録済」に更新しました。\n次にfreeeへこのファイルを取り込み、freee上で内容をご確認ください。`);
+  alert(`freee用エクセルファイルを出力しました！（対象: ${targets.length}件）\n\n台帳は「取込待ち」にしました。freeeへ取り込み、登録を確認した後にステータスを更新してください。`);
 }
 
 // 通常の請求管理台帳CSVエクスポート
@@ -2892,6 +3022,16 @@ showQuoteLedger();
 showInvoiceLedger();
 renderClientMasterSelect();
 showClientMasterTable();
+fetch("/api/status").then(r => r.json()).then(s => {
+  const label = document.getElementById("freeeConnectionStatus");
+  if (label) label.textContent = s.connected ? (s.settingsReady ? "freee接続中・設定済み" : "freee接続中・初期設定が必要です") : (s.configured ? "freee未接続" : "freee連携サーバーの設定が必要です");
+  if (s.connected && s.settingsReady) loadFreeeMasters();
+}).catch(() => {
+  const label = document.getElementById("freeeConnectionStatus");
+  if (label) label.textContent = "連携サーバー未起動";
+});
+setInterval(() => syncFreeeStatuses(false), 5 * 60 * 1000);
+syncFreeeStatuses(false);
 </script>
 
 </body>
