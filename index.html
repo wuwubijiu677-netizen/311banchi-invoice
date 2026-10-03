@@ -2587,10 +2587,10 @@ async function importFreeeSyncBackup(event) {
 async function syncFreeeStatuses(showMessage = false) {
   const statusText = document.getElementById("freeeConnectionStatus");
   try {
-    const response = await freeeApiFetch("/api/sync", { method: "POST" });
+    const ledger = getInvoiceLedger();
+    const response = await freeeApiFetch("/api/sync", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ invoiceNumbers: ledger.map(row => row.invoiceNumber) }) });
     const state = await response.json();
     if (!response.ok) throw new Error(state.error || "同期に失敗しました。");
-    const ledger = getInvoiceLedger();
     let changed = false;
     for (const row of ledger) {
       const remote = state.deals?.[String(row.invoiceNumber)];
