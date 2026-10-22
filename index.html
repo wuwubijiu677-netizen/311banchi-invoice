@@ -618,9 +618,17 @@ tr.row-won {
   }
 }
 </style>
+<script defer src="./cloud-backup.js?v=20261022-1"></script>
 </head>
 
 <body>
+<section id="banchiBackupPanel" style="padding:14px;margin:12px;border:2px solid #15803d;border-radius:8px;background:#f0fdf4;">
+<strong>公開版：自動バックアップ</strong>
+<button type="button" class="btn-success" onclick="banchiSetupBackup()">Google Drive保存先を設定</button>
+<button type="button" class="btn-sub" onclick="banchiRestoreLatest()">最新バックアップから復元</button>
+<p style="margin:8px 0">初回のみ、G: → マイドライブ（My Drive）を選択してください。既存の「311BANCHI_自動バックアップ」を選んでもフォルダーは増えません。変更時と15分ごとに自動保存します。PC内の日次処理は毎日18時・ログイン時に実行します。</p>
+<div id="banchiBackupStatus" role="status" aria-live="polite">バックアップの設定を確認中です。表示が変わらない場合は再読み込みしてください。</div>
+</section>
 
 <div class="container">
 
@@ -979,6 +987,7 @@ function getClientMaster() {
 
 function saveClientMasterList(list) {
   localStorage.setItem("311banchi_client_master", JSON.stringify(list));
+  window.queueBanchiBackup?.();
 }
 
 function formatInvoiceNumber(input) {
@@ -2088,6 +2097,7 @@ function getQuoteLedger() {
 
 function saveQuoteLedger(ledger) {
   localStorage.setItem("311banchi_quote_ledger", JSON.stringify(ledger));
+  window.queueBanchiBackup?.();
 }
 
 function registerCurrentQuote() {
@@ -2327,6 +2337,7 @@ function getInvoiceLedger() {
 
 function saveInvoiceLedger(ledger) {
   localStorage.setItem("311banchi_invoice_ledger", JSON.stringify(ledger));
+  window.queueBanchiBackup?.();
 }
 
 function validateInvoiceForFreeeData(record) {
@@ -2655,7 +2666,7 @@ function importBackupJSON(event) {
         throw new Error("バックアップファイルの形式が正しくありません。");
       }
 
-      if (!confirm(`バックアップファイルを読み込みますか？\n（請求データ ${data.ledger.length} 件、見積データ ${(data.quoteLedger || []).length} 件、取引先 ${(data.clientMaster || []).length} 件が復元されます）`)) {
+      if (!confirm(`保存日時：${data.exportDate ? new Date(data.exportDate).toLocaleString("ja-JP") : "不明"}\nこの時点の台帳に置き換えます。復元しますか？\n（請求データ ${data.ledger.length} 件、見積データ ${(data.quoteLedger || []).length} 件、取引先 ${(data.clientMaster || []).length} 件が復元されます）`)) {
         event.target.value = "";
         return;
       }
@@ -2821,6 +2832,7 @@ function printAndAdvance() {
   const issuedNumber = Math.max(enteredNumber || nextNumber, initialLastNumbers[docType]);
 
   localStorage.setItem(numberKey, String(issuedNumber));
+  window.queueBanchiBackup?.();
 
   window.print();
 
