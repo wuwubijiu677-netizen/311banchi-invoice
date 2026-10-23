@@ -2018,6 +2018,37 @@ function updatePreview() {
 }
 
 // AIミスチェック手動実行
+// Structured dates are checked deterministically, not by the language model.
+function banchiCheckDocumentDates(type, issued, deadline, routeList) {
+  const valid = value => {
+    if(typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value))return '';
+    const parsed=new Date(value+'T00:00:00Z');
+    return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0,10)===value ? value : '';
+  };
+  const issues=[];
+  if(valid(issued) && valid(deadline) && deadline<issued)issues.push((type==='invoice'?'入金期日':'有効期限')+'が発行日より前です。設定をご確認ください。');
+  for(const [index,route] of (Array.isArray(routeList)?routeList:[]).entries()){
+    let pickup='';
+    for(const stop of (Array.isArray(route.stops)?route.stops:[])){
+      const date=valid(stop.date||route.date);
+      if(stop.kind==='搬出' && date)pickup=date;
+      if(stop.kind==='搬入' && date && pickup && date<pickup)issues.push('運搬ルート'+(index+1)+'：搬入日（'+date+'）が、その前の搬出日（'+pickup+'）より前です。作業日をご確認ください。');
+    }
+  }
+  // Issuing an invoice after completion is normal; never compare issue date with work date.
+  return issues;
+}
+function banchiAiPayloadWithoutDates(value) {
+  if(Array.isArray(value))return value.map(banchiAiPayloadWithoutDates);
+  if(value && typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([key])=>!['発行日','期日','date','作業日','請求日','見積日','搬出日','搬入日'].includes(key)).map(([key,item])=>[key,banchiAiPayloadWithoutDates(item)]));
+  return value;
+}
+function banchiNonDateAiReply(reply) {
+  if(!reply)return 'チェック結果を取得できませんでした。';
+  if(/発行日|請求日|入金期日|有効期限|搬出日|搬入日|時系列|日付.{0,12}(?:矛盾|前後)|作業.{0,12}発行|発行.{0,12}作業/.test(reply))return 'AIが対象外の日付を推測したため、その回答は採用していません。日付は上の固定ルールによる確認結果をご覧ください。';
+  return reply;
+}
+
 async function runAICheck() {
   const apiKey = document.getElementById("geminiApiKey").value.trim();
   if (!apiKey) {
@@ -2049,25 +2080,32 @@ async function runAICheck() {
     合計金額: getTotals().total
   };
 
+  const dateIssues=banchiCheckDocumentDates(docType,payloadData.発行日,payloadData.期日,payloadData.運搬ルート);
+  const dateResult=dateIssues.length?dateIssues.join('\n'):'入力された期日・搬出入日の前後関係に問題は見当たりません。';
+  const aiPayload=banchiAiPayloadWithoutDates(payloadData);
   const prompt = `あなたは物流・運送業（合同会社311BANCHI）の帳票（見積書・請求書）を精査するプロのアシスタントです。
 以下の入力データを確認し、実務的な観点からミスや記載漏れ、重大な矛盾がないかチェックしてください。
 
 【データ】
-${JSON.stringify(payloadData, null, 2)}
+${JSON.stringify(aiPayload, null, 2)}
 
 【業務・業界ルール（※以下は正常な運用のため指摘不要です）】
 ・搬入先や復路などの「時間」は、積込後の直行・流れ作業（着後順次納品）が基本となるため、時間が空欄であっても未記入や漏れとして指摘しないでください。
 ・合計金額は「明細の小計 ＋ 消費税10%」で自動算出されています。小計と合計金額の差額が消費税分（10%）であれば不一致として指摘しないでください。
 ・宵積み、一時預かりによる翌日配送などは通常の業務フローです。
 
-【重要：日付や日数の照合ルール】
+【日付の判断はプログラムの担当です】
+・作業完了後に請求書を発行するのは正常です。発行日を作業日より前へ戻すよう勧めないでください。
+・発行日・期日・搬出入日の前後関係は固定ルールで別途確認します。AIにはこれらの日付を渡していません。推測・指摘・評価しないでください。
+
+【摘要に記載された日数の照合ルール】
 ・摘要欄等に「9/1, 9/2...」のように運行日が列挙されている場合、感覚や推測で「〇日分ある」と決めつけないでください。
 ・AIは文字のカウントで数え間違いを起こしやすいため、日数の不一致を指摘する場合は、必ず列挙されている日付を1日ずつ正確にすべて書き出して検算してください。確証が持てない場合は日数の不一致を軽率に指摘しないでください。
 
 【重点チェック観点】
 1. 住所の町名や番地抜け、誤字などの明らかな表記不備（例：区のあとに町名がなく番地になっている等）
 2. 必須項目の漏れ（取引先会社名、案件名、明細単価が0円のまま等）
-3. 日付の前後関係の重大な矛盾（搬入日が搬出日より過去の日付になっている等）
+3. 明細の摘要・数量・単価に、入力データで裏付けられる明らかな不整合があるか（日付の前後関係の判断は対象外）
 4. その他、取引先へ発行する書類として明らかに失礼・不備となる点
 
 修正すべき点があれば箇条書きで簡潔にアドバイスし、問題がなければ「実務上問題は見当たりませんでした」と伝えてください。`;
@@ -2083,7 +2121,7 @@ ${JSON.stringify(payloadData, null, 2)}
 
     const data = await res.json();
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    aiResult.textContent = reply || "チェック結果を取得できませんでした。";
+    aiResult.textContent = '日付の確認（固定ルール）\n'+dateResult+'\n※請求書の発行日が作業日より後でも、それだけで矛盾とは判定しません。\n\nその他のAIチェック\n'+banchiNonDateAiReply(reply);
 
   } catch (err) {
     aiResult.textContent = `チェック中にエラーが発生しました:\n${err.message}\n※APIキーまたはネットワーク接続をご確認ください。`;
