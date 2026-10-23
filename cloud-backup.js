@@ -25,8 +25,8 @@
   function data(){return {version:'2.1',exportDate:new Date().toISOString(),
     quoteNumber:localStorage.getItem('311banchi_quote_number')||initialLastNumbers.quote,
     invoiceNumber:localStorage.getItem('311banchi_invoice_number')||initialLastNumbers.invoice,
-    ledger:getInvoiceLedger(),quoteLedger:getQuoteLedger(),clientMaster:getClientMaster()};}
-  const empty=value=>['ledger','quoteLedger','clientMaster'].every(key=>Array.isArray(value[key])&&!value[key].length);
+    drafts:window.banchiDraftExport?.(),ledger:getInvoiceLedger(),quoteLedger:getQuoteLedger(),clientMaster:getClientMaster()};}
+  const empty=value=>['ledger','quoteLedger','clientMaster'].every(key=>Array.isArray(value[key])&&!value[key].length); // Empty ledgers never overwrite an existing recovery backup, even with drafts.
   function validate(value){
     if(!['ledger','quoteLedger','clientMaster'].every(key=>Array.isArray(value[key]))||!Number.isFinite(Date.parse(value.exportDate)))throw Error('バックアップの内容または保存日時が正しくありません。復元・上書きはしていません。');
     return value;
