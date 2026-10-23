@@ -46,7 +46,7 @@
   };
   function init(){ready=true;
     const originalSave=window.banchiSaveCurrentDocument;
-    window.banchiSaveCurrentDocument=function(){const row=originalSave();if(row){try{const data=read();data.lastRegistered={number:row.quoteNumber||row.invoiceNumber,subject:row.subject,savedAt:new Date().toISOString()};localStorage.setItem(key,JSON.stringify(data));node('banchiLastRegistered').textContent='直近の台帳保存：'+data.lastRegistered.number+' ／ '+data.lastRegistered.subject+'（PDFの保存結果は上のPDF欄で確認）';}catch(error){failure=error.message;}display();}return row;};
+    window.banchiSaveCurrentDocument=function(...args){const row=originalSave(...args);if(row){try{const data=read();data.lastRegistered={number:row.quoteNumber||row.invoiceNumber,subject:row.subject,savedAt:new Date().toISOString()};localStorage.setItem(key,JSON.stringify(data));node('banchiLastRegistered').textContent='直近の台帳保存：'+data.lastRegistered.number+' ／ '+data.lastRegistered.subject+'（PDFの保存結果は上のPDF欄で確認）';}catch(error){failure=error.message;}display();}return row;};
     try{const data=read();if(data.lastRegistered)node('banchiLastRegistered').textContent='直近の台帳保存：'+data.lastRegistered.number+' ／ '+data.lastRegistered.subject+'（PDFの保存結果は上のPDF欄で確認）';pendingRestore=Object.keys(data.drafts).length>0;const state=data.drafts[data.activeType];if(state)apply(state);}catch(error){failure=error.message;pendingRestore=true;}display();
     document.addEventListener('input',window.banchiDraftChanged);document.addEventListener('change',window.banchiDraftChanged);document.addEventListener('click',()=>{clearTimeout(timer);timer=setTimeout(()=>{if(!pendingRestore)save();else display();},350);});
     setInterval(display,2000);
