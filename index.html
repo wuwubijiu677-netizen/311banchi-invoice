@@ -620,9 +620,11 @@ tr.row-won {
 }
 @media print { #banchiBackupPanel { display:none!important; } .doc-table tr, .bottom-grid { break-inside:avoid; page-break-inside:avoid; } }
 </style>
-<script defer src="./cloud-backup.js?v=20261022-2"></script>
+<script defer src="./cloud-backup.js?v=20261023-drafts"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.14.0/dist/html2pdf.bundle.min.js" integrity="sha384-EaWTV/aVUkLz3tfwg3+5ycX7Q/d9ET9ruOKUgUuFIRUCfzHO1eo2J62a844iWPmY" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script defer src="./document-archive.js?v=20261023-duplicate-guard"></script>
+<script defer src="./document-drafts.js?v=20261023-1"></script>
+<style>@media print{#banchiDraftPanel{display:none!important}}</style>
 </head>
 
 <body>
@@ -804,6 +806,14 @@ tr.row-won {
     <button class="btn-sub" type="button" onclick="addExtraBank()">＋ 振込先を追加</button>
   </div>
 
+  <section id="banchiDraftPanel" style="padding:12px;border:1px solid #94a3b8;border-radius:8px;margin:12px 0;background:#f8fafc">
+    <strong>現在の書類の保存状態</strong>
+    <div id="banchiLedgerState" role="status" aria-live="polite">確認中</div>
+    <div id="banchiLastRegistered" role="status"></div>
+    <div id="banchiDraftState" role="status" aria-live="polite">下書き保存の準備中</div>
+    <button type="button" class="btn-sub" onclick="banchiRestoreDraft()">下書きを戻す</button>
+    <button type="button" class="btn-sub" onclick="banchiStartDraft()">現在の入力を下書きに保存</button>
+  </section>
   <div class="actions">
     <button class="btn-ai" type="button" onclick="runAICheck()">🤖 AIミスチェックを実行</button>
     <button class="btn-main" onclick="updatePreview()">プレビュー更新</button>
@@ -1517,6 +1527,7 @@ const banks = {
 };
 
 function setDocType(type) {
+  window.banchiFlushDraft?.();
   if (docType === "invoice" && type === "quote" && autoInvoiceDeadline) {
     document.getElementById("deadline").value = "";
   }
@@ -2016,6 +2027,7 @@ function updatePreview() {
     </div>
     <div class="doc-footer">${companyInfo.name}</div>
   `;
+  window.banchiDraftChanged?.();
 }
 
 // AIミスチェック手動実行
@@ -2614,6 +2626,7 @@ async function exportBackupJSON() {
     invoiceNumber: invoiceNum,
     quoteLedger: quoteLedger,
     ledger: invoiceLedger,
+    drafts: window.banchiDraftExport?.(),
     clientMaster: clientMaster
   };
 
@@ -2668,6 +2681,7 @@ function importBackupJSON(event) {
         return;
       }
 
+      if(data.drafts)window.banchiDraftImport?.(data.drafts);
       saveInvoiceLedger(data.ledger);
       if (data.quoteLedger && Array.isArray(data.quoteLedger)) {
         saveQuoteLedger(data.quoteLedger);
