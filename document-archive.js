@@ -90,7 +90,19 @@
     const row={...old,...window.banchiSnapshotFields(),customer:value('customerCompany'),subject:value('subject'),deadline:value('deadline'),amount:getTotals().total};
     if(type==='invoice'){row.invoiceNumber=number;row.invoiceDate=date;row.freeeStatus=old.freeeStatus||'未登録';row.paymentStatus=old.paymentStatus||'未入金';}
     else{row.quoteNumber=number;row.quoteDate=date;row.status=old.status||'検討中';}
-    if(index<0)rows.unshift(row);else rows[index]=row;persist(type,rows);showInvoiceLedger();showQuoteLedger();window.banchiQueueDocument(type,row);return row;
+
+    if(type==='quote' && index>=0){
+      const fields=['customer','subject','quoteDate','deadline','dept','person','zip','address','building','invoiceNo','cargo','notes','routes','items','extraBanks','amount'];
+      const same=fields.every(key=>JSON.stringify(old[key]??'')===JSON.stringify(row[key]??''));
+      if(!same){alert('【見積番号の重複】'+number+' は既に登録されています。\n登録済み：'+old.customer+' ／ '+old.subject+' ／ '+old.quoteDate+'\n上書き・PDF保存・印刷を中止しました。\n新規案件は未使用の番号に変更し、同じ案件の変更は台帳の「再見積」から枝番を作成してください。');return;}
+      window.banchiQueueDocument(type,old);return old;
+    }
+    if(index<0)rows.unshift(row);else rows[index]=row;persist(type,rows);
+    if(type==='quote'){
+      const used=Number((/^Q-(\d+)/.exec(number)||[])[1])||0;
+      localStorage.setItem('311banchi_quote_number',String(Math.max(Number(localStorage.getItem('311banchi_quote_number'))||0,used)));
+    }
+    showInvoiceLedger();showQuoteLedger();window.banchiQueueDocument(type,row);return row;
   };
   window.banchiOpenPdf=async(type,index)=>{
     const row=ledger(type)[index];if(!row?.pdfFile){alert('この書類のPDFはまだ保存されていません。');return;}
