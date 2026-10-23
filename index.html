@@ -622,7 +622,7 @@ tr.row-won {
 </style>
 <script defer src="./cloud-backup.js?v=20261022-2"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.14.0/dist/html2pdf.bundle.min.js" integrity="sha384-EaWTV/aVUkLz3tfwg3+5ycX7Q/d9ET9ruOKUgUuFIRUCfzHO1eo2J62a844iWPmY" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script defer src="./document-archive.js?v=20261022-1"></script>
+<script defer src="./document-archive.js?v=20261023-duplicate-guard"></script>
 </head>
 
 <body>
@@ -1446,7 +1446,8 @@ function getNumberInfo() {
 
   const lastNumber = Math.max(
     parsedNumber,
-    initialLastNumbers[docType]
+    initialLastNumbers[docType],
+    ...(docType === "quote" ? getQuoteLedger().map(row => Number((/^Q-(\d+)/.exec(row.quoteNumber || "") || [])[1]) || 0) : [])
   );
 
   return {
@@ -2146,68 +2147,9 @@ function saveQuoteLedger(ledger) {
 }
 
 function registerCurrentQuote() {
-  if (docType !== "quote") {
-    alert("見積書に切り替えてから登録してください。");
-    return;
-  }
-  const quoteNumber = document.getElementById("docNumber").value.trim();
-  const quoteDate = document.getElementById("docDate").value;
-  const customer = document.getElementById("customerCompany").value.trim();
-  const dept = document.getElementById("customerDept").value.trim();
-  const person = document.getElementById("customerPerson").value.trim();
-  const subject = document.getElementById("subject").value.trim();
-  const zip = document.getElementById("customerZip").value.trim();
-  const address = document.getElementById("customerAddress").value.trim();
-  const building = document.getElementById("customerBuilding").value.trim();
-  const invoiceNo = document.getElementById("customerInvoiceNo").value.trim();
-  const deadline = document.getElementById("deadline").value;
-  const cargo = document.getElementById("cargo").value;
-  const notes = document.getElementById("notes").value;
-  const amount = getTotals().total;
-
-  if (!quoteNumber || !quoteDate || !customer || !subject) {
-    alert("見積日・見積書番号・取引先・案件名を入力してください。");
-    return;
-  }
-
-  const ledger = getQuoteLedger();
-  const record = {
-    quoteNumber,
-    quoteDate,
-    customer,
-    dept,
-    person,
-    subject,
-    zip,
-    address,
-    building,
-    invoiceNo,
-    deadline,
-    cargo,
-    notes,
-    routes: JSON.parse(JSON.stringify(routes)),
-    items: JSON.parse(JSON.stringify(items)),
-    amount,
-    status: "検討中",
-    ...window.banchiSnapshotFields()
-  };
-
-  const existingIndex = ledger.findIndex(x => x.quoteNumber === quoteNumber);
-  if (existingIndex >= 0) {
-    record.status = ledger[existingIndex].status || "検討中";
-    ledger[existingIndex] = record;
-    saveQuoteLedger(ledger);
-    window.banchiQueueDocument("quote", record);
-    showQuoteLedger();
-    alert("見積管理台帳を更新しました。");
-    return;
-  }
-
-  ledger.unshift(record);
-  saveQuoteLedger(ledger);
-  window.banchiQueueDocument("quote", record);
-  showQuoteLedger();
-  alert("見積管理台帳に登録しました。");
+  if(docType!=='quote'){alert('見積書に切り替えてから登録してください。');return;}
+  const row=window.banchiSaveCurrentDocument();
+  if(row)alert('見積管理台帳に保存済みです：'+row.quoteNumber);
 }
 
 function showQuoteLedger() {
@@ -2867,7 +2809,7 @@ function exportCSV() {
 
 function printAndAdvance() {
   updatePreview();
-  window.banchiSaveCurrentDocument();
+  if(!window.banchiSaveCurrentDocument())return;
 
   const subject = document.getElementById("subject").value.trim() || "案件名なし";
   const customer = document.getElementById("customerCompany").value.trim() || "取引先";
