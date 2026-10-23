@@ -56,12 +56,19 @@
         try{const old=await directory.getFileHandle(name);const text=await (await old.getFile()).text();validate(JSON.parse(text.replace(/^\uFEFF/,'')));await write(directory,'311BANCHI_上書き前.json',text);}catch(error){if(error.name!=='NotFoundError')throw error;}
         await write(directory,name,JSON.stringify(value,null,2));
         warned=false;
-        message('保存・内容確認済み：'+now.toLocaleString('ja-JP')+' ／ '+directory.name+'（Google Driveのクラウド同期完了はDriveで確認）');
+        message('台帳JSON 保存・内容確認済み：'+now.toLocaleString('ja-JP')+' ／ '+directory.name+'（PDFは別欄で確認／クラウド同期完了はDriveで確認）');
+        window.banchiRetryDocuments?.();
       }catch(error){message(error.message,true);}
     });
     return chain;
   }
   window.queueBanchiBackup=()=>{clearTimeout(timer);timer=setTimeout(save,2000);};
+  window.banchiGetBackupDirectory=async()=>{
+    directory=directory||await recall();
+    if(!directory)throw Error('Google Driveの保存先が未設定です。上の設定ボタンを押してください。');
+    if(await directory.queryPermission({mode:'readwrite'})!=='granted')throw Error('Google Driveへの保存許可が必要です。上の設定ボタンを押してください。');
+    return directory;
+  };
   window.banchiSetupBackup=async()=>{
     try{
       if(!window.showDirectoryPicker)throw Error('ChromeまたはEdgeで開いてください。');
@@ -74,6 +81,7 @@
         await remember(directory);
       }
       await save();
+      window.banchiRetryDocuments?.();
     }catch(error){if(error.name!=='AbortError')message(error.message,true);}
   };
   window.banchiRestoreLatest=async()=>{
