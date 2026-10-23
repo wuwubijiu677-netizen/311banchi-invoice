@@ -70,7 +70,7 @@
         const name=cleanName(row.subject)+'_'+cleanName(identity(type,row))+'_'+row.documentRevision+'.pdf';
         const blob=await pdf(row);await binaryWrite(folder,name,blob);
         // Record success only for the exact revision whose bytes were saved.
-        const rows=ledger(type),index=rows.findIndex(value=>identity(type,value)===identity(type,row));
+        const rows=ledger(type),index=rows.findIndex(value=>identity(type,value)===identity(type,row)&&value.documentRevision===row.documentRevision);
         if(index>=0&&rows[index].documentRevision===row.documentRevision){rows[index].pdfRevision=row.documentRevision;rows[index].pdfFile=name;rows[index].pdfSavedAt=new Date().toISOString();persist(type,rows);if(type==='invoice')showInvoiceLedger();else showQuoteLedger();}
         warned=false;status();
       }catch(error){status(error.message);}finally{pending.delete(key);}
@@ -81,7 +81,7 @@
     for(const type of ['invoice','quote'])for(const row of ledger(type))if(row.documentHtml&&row.pdfRevision!==row.documentRevision)window.banchiQueueDocument(type,row);
     status();
   };
-  window.banchiSaveCurrentDocument=()=>{
+  window.banchiSaveCurrentDocument=(options={})=>{
     const type=docType;if(!['invoice','quote'].includes(type))return;
     const value=id=>document.getElementById(id).value.trim();
     const number=value('docNumber'),date=value('docDate');
@@ -91,16 +91,19 @@
     if(type==='invoice'){row.invoiceNumber=number;row.invoiceDate=date;row.freeeStatus=old.freeeStatus||'未登録';row.paymentStatus=old.paymentStatus||'未入金';}
     else{row.quoteNumber=number;row.quoteDate=date;row.status=old.status||'検討中';}
 
-    if(type==='quote' && index>=0){
-      const fields=['customer','subject','quoteDate','deadline','dept','person','zip','address','building','invoiceNo','cargo','notes','routes','items','extraBanks','amount'];
+    if(rows.filter(value=>identity(type,value)===number).length>1){alert('【番号の重複】'+number+' は複数の案件に使われています。上書き・PDF保存を中止しました。台帳とPDF原本を確認してください。');return;}
+    if(index>=0){
+      const fields=['customer','subject',type==='invoice'?'invoiceDate':'quoteDate','deadline','dept','person','zip','address','building','invoiceNo','cargo','notes','routes','items','extraBanks','amount'];
       const same=fields.every(key=>JSON.stringify(old[key]??'')===JSON.stringify(row[key]??''));
-      if(!same){alert('【見積番号の重複】'+number+' は既に登録されています。\n登録済み：'+old.customer+' ／ '+old.subject+' ／ '+old.quoteDate+'\n上書き・PDF保存・印刷を中止しました。\n新規案件は未使用の番号に変更し、同じ案件の変更は台帳の「再見積」から枝番を作成してください。');return;}
+      if(!same){alert('【'+(type==='invoice'?'請求書番号':'見積番号')+'の重複】'+number+' は既に登録されています。\n登録済み：'+old.customer+' ／ '+old.subject+' ／ '+(type==='invoice'?old.invoiceDate:old.quoteDate)+'\n上書き・PDF保存・印刷を中止しました。\n新規案件は未使用の番号に変更し、見積の変更は台帳の「再見積」を利用してください。請求書は台帳とPDF原本を確認してください。');return;}
       window.banchiQueueDocument(type,old);return old;
     }
+    if(type==='invoice' && options.sourceQuoteNumber)row.sourceQuoteNumber=options.sourceQuoteNumber;
     if(index<0)rows.unshift(row);else rows[index]=row;persist(type,rows);
-    if(type==='quote'){
-      const used=Number((/^Q-(\d+)/.exec(number)||[])[1])||0;
-      localStorage.setItem('311banchi_quote_number',String(Math.max(Number(localStorage.getItem('311banchi_quote_number'))||0,used)));
+    {
+      const used=Number(((type==='quote'?/^Q-(\d+)/:/^INV-(\d+)/).exec(number)||[])[1])||0;
+      const counterKey=type==='quote'?'311banchi_quote_number':'311banchi_invoice_number';
+      localStorage.setItem(counterKey,String(Math.max(Number(localStorage.getItem(counterKey))||0,used)));
     }
     showInvoiceLedger();showQuoteLedger();window.banchiQueueDocument(type,row);return row;
   };
