@@ -573,8 +573,8 @@ tr.row-won {
     padding: 0 !important;
     background: #fff !important;
     width: 297mm !important;
-    height: 210mm !important;
-    overflow: hidden !important;
+    height: auto !important;
+    overflow: visible !important;
   }
 
   .container,
@@ -605,19 +605,20 @@ tr.row-won {
   #printArea {
     position: static !important;
     width: 297mm !important;
-    height: 210mm !important;
+    min-height: 210mm !important;
+    height: auto !important;
     margin: 0 !important;
     padding: 10mm 15mm !important;
     box-sizing: border-box !important;
     box-shadow: none !important;
     page-break-after: avoid !important;
-    page-break-inside: avoid !important;
-    overflow: hidden !important;
+    page-break-inside: auto !important;
+    overflow: visible !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 }
-@media print { #banchiBackupPanel { display:none!important; } }
+@media print { #banchiBackupPanel { display:none!important; } .doc-table tr, .bottom-grid { break-inside:avoid; page-break-inside:avoid; } }
 </style>
 <script defer src="./cloud-backup.js?v=20261022-2"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.14.0/dist/html2pdf.bundle.min.js" integrity="sha384-EaWTV/aVUkLz3tfwg3+5ycX7Q/d9ET9ruOKUgUuFIRUCfzHO1eo2J62a844iWPmY" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
