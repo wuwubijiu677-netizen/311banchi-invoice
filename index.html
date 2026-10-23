@@ -617,8 +617,11 @@ tr.row-won {
     print-color-adjust: exact !important;
   }
 }
+@media print { #banchiBackupPanel { display:none!important; } }
 </style>
-<script defer src="./cloud-backup.js?v=20261022-1"></script>
+<script defer src="./cloud-backup.js?v=20261022-2"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.14.0/dist/html2pdf.bundle.min.js" integrity="sha384-EaWTV/aVUkLz3tfwg3+5ycX7Q/d9ET9ruOKUgUuFIRUCfzHO1eo2J62a844iWPmY" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script defer src="./document-archive.js?v=20261022-1"></script>
 </head>
 
 <body>
@@ -627,6 +630,7 @@ tr.row-won {
 <button type="button" class="btn-success" onclick="banchiSetupBackup()">Google Drive保存先を設定</button>
 <button type="button" class="btn-sub" onclick="banchiRestoreLatest()">最新バックアップから復元</button>
 <p style="margin:8px 0">初回のみ、G: → マイドライブ（My Drive）を選択してください。既存の「311BANCHI_自動バックアップ」を選んでもフォルダーは増えません。変更時と15分ごとに自動保存します。PC内の日次処理は毎日18時・ログイン時に実行します。</p>
+<div id="banchiPdfStatus" role="status" aria-live="polite">明細・PDFの保存状況を確認中です。</div>
 <div id="banchiBackupStatus" role="status" aria-live="polite">バックアップの設定を確認中です。表示が変わらない場合は再読み込みしてください。</div>
 </section>
 
@@ -803,6 +807,7 @@ tr.row-won {
     <button class="btn-ai" type="button" onclick="runAICheck()">🤖 AIミスチェックを実行</button>
     <button class="btn-main" onclick="updatePreview()">プレビュー更新</button>
     <button class="btn-main" onclick="printAndAdvance()">PDF保存・印刷</button>
+<button class="btn-sub" onclick="banchiDownloadCurrentPdf()">PDFをダウンロード</button>
     <button class="btn-sub" onclick="resetForm()">入力内容をリセット</button>
   </div>
 
@@ -1466,10 +1471,11 @@ function getMonthEndDate(dateStr) {
 
   const lastDay = new Date(
     base.getFullYear(),
-    base.getMonth() + 1,
+    base.getMonth() + 2,
     0
   );
 
+  while(lastDay.getDay()===0 || lastDay.getDay()===6) lastDay.setDate(lastDay.getDate()-1);
   const y = lastDay.getFullYear();
   const m = String(lastDay.getMonth() + 1).padStart(2, "0");
   const d = String(lastDay.getDate()).padStart(2, "0");
@@ -2143,7 +2149,8 @@ function registerCurrentQuote() {
     routes: JSON.parse(JSON.stringify(routes)),
     items: JSON.parse(JSON.stringify(items)),
     amount,
-    status: "検討中"
+    status: "検討中",
+    ...window.banchiSnapshotFields()
   };
 
   const existingIndex = ledger.findIndex(x => x.quoteNumber === quoteNumber);
@@ -2151,6 +2158,7 @@ function registerCurrentQuote() {
     record.status = ledger[existingIndex].status || "検討中";
     ledger[existingIndex] = record;
     saveQuoteLedger(ledger);
+    window.banchiQueueDocument("quote", record);
     showQuoteLedger();
     alert("見積管理台帳を更新しました。");
     return;
@@ -2158,6 +2166,7 @@ function registerCurrentQuote() {
 
   ledger.unshift(record);
   saveQuoteLedger(ledger);
+  window.banchiQueueDocument("quote", record);
   showQuoteLedger();
   alert("見積管理台帳に登録しました。");
 }
@@ -2199,6 +2208,7 @@ function showQuoteLedger() {
           <button class="btn-convert" onclick="convertQuoteToInvoice(${index})">⚡ 請求書へ変換</button>
         </td>
         <td style="text-align:center;">
+          ${row.pdfFile && row.pdfRevision===row.documentRevision ? `<button class="btn-sub" onclick="banchiOpenPdf('quote',${index})">保存済みPDF</button>` : ""}
           <button class="btn-danger" onclick="deleteQuoteLedger(${index})">削除</button>
         </td>
       </tr>
@@ -2250,6 +2260,8 @@ function convertQuoteToInvoice(index) {
   routes = q.routes ? JSON.parse(JSON.stringify(q.routes)) : [];
   items = q.items ? JSON.parse(JSON.stringify(q.items)) : [];
 
+  extraBanks = JSON.parse(JSON.stringify(q.extraBanks || []));
+  renderExtraBanks();
   renderRoutes();
   renderItems();
 
@@ -2476,6 +2488,7 @@ function registerCurrentInvoice() {
     subject,
     amount,
     deadline,
+    ...window.banchiSnapshotFields(),
     freeeStatus: changedAfterRegistered ? "未登録" : (existing?.freeeStatus || "未登録"),
     paymentStatus: existing?.paymentStatus || "未入金"
   };
@@ -2487,6 +2500,7 @@ function registerCurrentInvoice() {
   }
 
   saveInvoiceLedger(ledger);
+  window.banchiQueueDocument("invoice", record);
   showInvoiceLedger();
   showQuoteLedger();
 
@@ -2568,6 +2582,8 @@ function showInvoiceLedger() {
           </select>
         </td>
         <td>
+          ${row.documentHtml ? `<button class="btn-sub" onclick="banchiLoadInvoice(${index})">明細を開く</button>` : `<span style="color:#b45309;">明細未保存（過去分）</span>`}
+          ${row.pdfFile && row.pdfRevision===row.documentRevision ? `<button class="btn-sub" onclick="banchiOpenPdf('invoice',${index})">保存済みPDF</button>` : ""}
           <button class="btn-danger" onclick="deleteInvoiceLedger(${index})">削除</button>
         </td>
       </tr>
@@ -2812,6 +2828,7 @@ function exportCSV() {
 
 function printAndAdvance() {
   updatePreview();
+  window.banchiSaveCurrentDocument();
 
   const subject = document.getElementById("subject").value.trim() || "案件名なし";
   const customer = document.getElementById("customerCompany").value.trim() || "取引先";
